@@ -40,7 +40,7 @@
               # nixos-hardware defaults to Gen12+ runtimes; override for correct
               # Jellyfin VAAPI transcoding paths.
               hardware.intelgpu.computeRuntime = "legacy";
-              hardware.intelgpu.mediaRuntime   = "intel-media-sdk";
+              hardware.intelgpu.mediaRuntime   = "vpl-gpu-rt";
             }
           ];
         };

@@ -165,6 +165,10 @@ in
     };
   };
 
+  # ── Tailscale ─────────────────────────────────────────────────────────────
+  services.tailscale.enable = true;
+  networking.firewall.trustedInterfaces = [ "tailscale0" ];
+
   # ── SSH ───────────────────────────────────────────────────────────────────
   services.openssh = {
     enable = true;
@@ -198,6 +202,6 @@ in
     allowedTCPPortRanges = [
       { from = 49152; to = 49156; } # GlusterFS bricks (3 volumes × ~1 port each)
     ];
-    allowedUDPPorts = [ 22000 21027 ]; # Syncthing sync + local discovery
+    allowedUDPPorts = [ 22000 21027 config.services.tailscale.port ];
   };
 }

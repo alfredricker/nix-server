@@ -47,26 +47,32 @@
       };
     };
 
-    # ── GlusterFS brick drive (2.5" SATA) ─────────────────────────────────
-    # XFS is the recommended filesystem for GlusterFS bricks.
-    disk.sata = {
-      type   = "disk";
-      device = "/dev/sda";
-      content = {
-        type = "gpt";
-        partitions = {
-          bricks = {
-            size    = "100%";
-            content = {
-              type         = "filesystem";
-              format       = "xfs";
-              mountpoint   = "/gluster/bricks";
-              mountOptions = [ "defaults" "noatime" ];
-            };
-          };
-        };
-      };
-    };
+    # ── GlusterFS brick drive (external/SATA SSD) — optional ─────────────
+    # Uncomment when an external SSD is attached. XFS is recommended for bricks.
+    # Verify the device name with `lsblk` — it may be /dev/sda or /dev/sdb
+    # depending on what else is connected.
+    #
+    # Without this block, GlusterFS bricks live on the NVMe root partition at
+    # /gluster/bricks — fine for a single-node setup or initial testing.
+    #
+    # disk.sata = {
+    #   type   = "disk";
+    #   device = "/dev/sda";
+    #   content = {
+    #     type = "gpt";
+    #     partitions = {
+    #       bricks = {
+    #         size    = "100%";
+    #         content = {
+    #           type         = "filesystem";
+    #           format       = "xfs";
+    #           mountpoint   = "/gluster/bricks";
+    #           mountOptions = [ "defaults" "noatime" ];
+    #         };
+    #       };
+    #     };
+    #   };
+    # };
 
   };
 }
