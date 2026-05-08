@@ -165,6 +165,23 @@ in
     };
   };
 
+  # ── SSH ───────────────────────────────────────────────────────────────────
+  services.openssh = {
+    enable = true;
+    settings.PasswordAuthentication = false;
+    settings.PermitRootLogin = "prohibit-password";
+  };
+
+  users.users.fred = {
+    isNormalUser = true;
+    extraGroups  = [ "wheel" ];
+    openssh.authorizedKeys.keys = [
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIME9Bmh6fg68kew2hciqg+gKIqhw0/vBB76i7UQlkAIE alfred.ricker7@gmail.com"
+    ];
+  };
+
+  security.sudo.wheelNeedsPassword = false;
+
   # ── Firewall ──────────────────────────────────────────────────────────────
   networking.firewall = {
     enable = true;
@@ -173,6 +190,7 @@ in
       (ip: "ip saddr ${ip} accept; ")
       peerIPs;
     allowedTCPPorts = [
+      22     # SSH
       8096   # Jellyfin HTTP
       8920   # Jellyfin HTTPS
       24007  # GlusterFS management daemon
