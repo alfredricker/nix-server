@@ -1,50 +1,23 @@
 # Received via flake.nix specialArgs:
 #   hostname  – this node's hostname
-#   peerIPs   – IPs of the other media-nodes (used for GlusterFS backup servers)
+#   peerIPs   – reserved for future use (kept for API compatibility)
 { config, pkgs, lib, hostname, peerIPs, ... }:
 
-# Media node: distributed GlusterFS storage, Syncthing receiver, and
-# cinemafred edge cache. Each node serves as a CDN edge via Nginx and a
-# dedicated Cloudflare Tunnel. The Cloudflare Worker on cinemafred.com routes
-# visitors to the geographically nearest online node.
+# Media node: cinemafred CDN edge + optional TV kiosk.
 #
-# GlusterFS bootstrap (run once on one media-node after all nodes are deployed):
-#
-#   gluster peer probe <other-node-ip>
-#
-#   gluster volume create private-vol replica 2 \
-#     node-1:/gluster/bricks/private node-2:/gluster/bricks/private
-#   gluster volume create cinemafred-vol \
-#     node-1:/gluster/bricks/cinemafred node-2:/gluster/bricks/cinemafred
-#
-#   gluster volume start private-vol
-#   gluster volume start cinemafred-vol
-#
-# Syncthing bootstrap (after GlusterFS is running):
-#   1. Get this node's device ID from the web UI: http://<host>.headnet.local:8384
-#   2. Add it to main-node's Syncthing web UI and include it in each folder
-#   3. Accept the share here — sync starts automatically
+# Jellyfin content is streamed from main-node over Tailscale — no local copy.
+# Cinemafred HLS content is cached locally on demand: fetched from main-node
+# on first request, served from disk on subsequent ones, LRU-evicted when full.
 #
 # Cloudflare Tunnel bootstrap (per node):
 #   cloudflared tunnel create <hostname>
 #   cloudflared tunnel route dns <hostname> node-<hostname>.rickermedia.com
-#   Store credentials at /run/secrets/cloudflare-tunnel-<hostname>.json
+#   Store credentials at /run/secrets/cloudflare-tunnel-<hostname>.json (agenix)
 
 let
-  brickBase = "/gluster/bricks";
-
-  glusterMount = volName: extra:
-    let backup = lib.concatStringsSep ":" peerIPs; in {
-      device  = "localhost:/${volName}";
-      fsType  = "glusterfs";
-      options = [ "_netdev" ]
-        ++ lib.optional (backup != "") "backupvolfile-server=${backup}"
-        ++ extra;
-    };
-
   # Watches the Nginx access log for HLS playlist requests (.m3u8) and
-  # pre-fetches all referenced .ts segments so they're cached before the
-  # player asks for them. Runs as the nginx user to read the access log.
+  # pre-fetches all referenced .ts segments so they're in cache before
+  # the player requests them sequentially.
   prefetchDaemon = pkgs.writeTextFile {
     name        = "cinemafred-prefetch";
     executable  = true;
@@ -84,68 +57,14 @@ let
               prefetch(m.group(1))
     '';
   };
-
 in
 {
-  # ── GlusterFS server ──────────────────────────────────────────────────────
-  services.glusterfs.enable = true;
-  environment.systemPackages = [ pkgs.glusterfs ];
-
-  systemd.tmpfiles.rules = [
-    "d ${brickBase}/private     0700 root  root  -"
-    "d ${brickBase}/cinemafred  0700 root  root  -"
-    "d /var/cache/nginx/cinemafred 0750 nginx nginx -"
-  ];
-
-  # ── GlusterFS client mounts ───────────────────────────────────────────────
-  fileSystems = {
-    "/data/private"    = glusterMount "private-vol"    [];
-    "/data/cinemafred" = glusterMount "cinemafred-vol" [];
-  };
-
-  # ── Media directory tree ──────────────────────────────────────────────────
-  systemd.services.media-dirs = {
-    description = "Ensure media directory tree exists on GlusterFS mounts";
-    after    = [ "data-private.mount" "data-cinemafred.mount" ];
-    wants    = [ "data-private.mount" "data-cinemafred.mount" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = { Type = "oneshot"; RemainAfterExit = true; };
-    script = ''
-      for d in music movies tv; do
-        install -d -m 0770 /data/private/$d
-      done
-      install -d -m 0755 /data/cinemafred
-    '';
-  };
-
-  # ── Syncthing (receive-only from main-node) ───────────────────────────────
-  #
-  # Pulls media from main-node onto GlusterFS private-vol. Because private-vol
-  # is replicated, syncing on one node populates all media-nodes automatically.
-  # Pause individual folders in the web UI for selective per-node caching.
-  services.syncthing = {
-    enable    = true;
-    user      = "syncthing";
-    dataDir   = "/data/private";
-    configDir = "/var/lib/syncthing";
-    settings.folders = {
-      "media-music"  = { path = "/data/private/music";  type = "receiveonly"; devices = []; };
-      "media-movies" = { path = "/data/private/movies"; type = "receiveonly"; devices = []; };
-      "media-tv"     = { path = "/data/private/tv";     type = "receiveonly"; devices = []; };
-    };
-  };
-
-  systemd.services.syncthing = {
-    after = [ "data-private.mount" ];
-    wants = [ "data-private.mount" ];
-  };
-
   # ── Nginx (cinemafred edge cache) ─────────────────────────────────────────
   #
-  # Acts as a caching reverse proxy in front of main-node's HLS origin.
-  # Segments are fetched from main-node on first request and served locally
-  # on subsequent ones. max_size triggers LRU eviction when the cache fills.
-  # Tune max_size to ~80-90% of available disk on this node.
+  # Caching reverse proxy in front of main-node's HLS origin.
+  # On cache miss: fetches from main-node.headnet.local:8080 over Tailscale.
+  # On cache hit: serves from local disk with no round-trip to main-node.
+  # max_size triggers LRU eviction — tune to ~80% of available disk.
   services.nginx = {
     enable = true;
 
@@ -160,14 +79,10 @@ in
 
     virtualHosts."cinemafred-edge" = {
       listen = [{ addr = "127.0.0.1"; port = 8080; ssl = false; }];
-
-      # Log to a dedicated file so the prefetch daemon can tail it cleanly
       extraConfig = ''
         access_log /var/log/nginx/cinemafred-access.log;
       '';
-
       locations."/" = {
-        # Fetch from main-node over Tailscale on cache miss
         proxyPass = "http://main-node.headnet.local:8080";
         extraConfig = ''
           proxy_cache              cinemafred_cache;
@@ -178,10 +93,8 @@ in
           proxy_cache_lock_timeout 5s;
           proxy_cache_background_update on;
 
-          # Pass range requests through (needed for video seek)
-          proxy_set_header  Range $http_range;
-          proxy_set_header  If-Range $http_if_range;
-          proxy_hide_header X-Cache-Status;
+          proxy_set_header Range    $http_range;
+          proxy_set_header If-Range $http_if_range;
 
           add_header X-Cache-Status $upstream_cache_status always;
           add_header X-Edge-Node   "${hostname}" always;
@@ -195,10 +108,11 @@ in
     };
   };
 
+  systemd.tmpfiles.rules = [
+    "d /var/cache/nginx/cinemafred 0750 nginx nginx -"
+  ];
+
   # ── HLS prefetch daemon ───────────────────────────────────────────────────
-  #
-  # When a playlist is requested, fetches all its segments in the background
-  # so the cache is warm before the player requests them sequentially.
   systemd.services.cinemafred-prefetch = {
     description = "Pre-fetch HLS segments on playlist access";
     after       = [ "nginx.service" ];
@@ -212,10 +126,6 @@ in
   };
 
   # ── Cloudflare Tunnel (this node as a CDN edge) ───────────────────────────
-  #
-  # Exposes this node's Nginx cache at node-<hostname>.rickermedia.com.
-  # The Cloudflare Worker on cinemafred.com routes visitors here based on
-  # geographic proximity, falling back to other nodes and then main-node.
   services.cloudflared = {
     enable = true;
     tunnels."${hostname}" = {
@@ -224,18 +134,4 @@ in
       ingress."node-${hostname}.rickermedia.com" = "http://127.0.0.1:8080";
     };
   };
-
-  # ── Firewall ──────────────────────────────────────────────────────────────
-  networking.firewall.extraInputRules = lib.concatMapStrings
-    (ip: "ip saddr ${ip} accept; ")
-    peerIPs;
-
-  networking.firewall.allowedTCPPorts = [
-    22000  # Syncthing
-    24007  # GlusterFS management daemon
-  ];
-  networking.firewall.allowedTCPPortRanges = [
-    { from = 49152; to = 49156; }  # GlusterFS bricks
-  ];
-  networking.firewall.allowedUDPPorts = [ 22000 21027 ];  # Syncthing
 }

@@ -1,6 +1,6 @@
 # Home Media Cluster — Architecture
 
-A NixOS cluster of Intel NUC8 machines with two roles: a central **main-node** that is the authoritative data store and runs all server-side services, and one or more **media-nodes** that form a distributed filesystem, act as geographic CDN edges for cinemafred.com, and optionally run a TV kiosk.
+A NixOS cluster of Intel NUC8 machines with two roles: a central **main-node** that is the authoritative data store and runs all server-side services, and one or more **media-nodes** that act as geographic CDN edges for cinemafred.com and run a TV kiosk by default.
 
 ---
 
@@ -13,7 +13,6 @@ Always headless. The single source of truth for all media files.
 | Service | Purpose |
 |---|---|
 | **Jellyfin** | Streams music, movies, and TV. Exposed publicly at `jellyfin.rickermedia.com` and over Tailscale |
-| **Syncthing** | Distributes media to media-nodes in send-only mode |
 | **Nginx** | Serves HLS video segments for cinemafred.com; binds to all interfaces so media-nodes can proxy from it over Tailscale |
 | **Headscale** | Self-hosted VPN control plane — manages all node authentication and WireGuard keys |
 | **Cloudflare Tunnels** | `jellyfin.rickermedia.com`, `node-main.rickermedia.com`, `headscale.rickermedia.com` — no inbound firewall ports opened |
@@ -21,28 +20,27 @@ Always headless. The single source of truth for all media files.
 Local data layout:
 
 ```
-/data/music/          personal music library       → Jellyfin + Syncthing source
-/data/movies/         personal movie library       → Jellyfin + Syncthing source
-/data/tv/             personal TV library          → Jellyfin + Syncthing source
+/data/music/          personal music library       → Jellyfin source
+/data/movies/         personal movie library       → Jellyfin source
+/data/tv/             personal TV library          → Jellyfin source
 /data/cinemafred/     HLS segments for cinemafred  → Nginx origin, deployed via git
 ```
 
 ### media-nodes (`192.168.1.11+`, LA, upstate NY, Rochester, ...)
 
 Each media-node is simultaneously:
-- A **GlusterFS peer** — pooling disk with other media-nodes into replicated volumes
-- A **Syncthing receiver** — pulling media from main-node onto GlusterFS
-- A **cinemafred CDN edge** — Nginx caching proxy + Cloudflare Tunnel + prefetch daemon
-- Optionally a **TV kiosk** — plugged into a display for a Roku-like experience
+- A **cinemafred CDN edge** — Nginx caching proxy + prefetch daemon + Cloudflare Tunnel
+- A **TV kiosk** — fullscreen app launcher connected to main-node's Jellyfin over Tailscale
+
+There is no local copy of the Jellyfin media library on media-nodes. Music, movies, and TV stream from main-node over Tailscale. Only cinemafred HLS content is cached locally, and only on demand — nothing is pre-downloaded.
 
 | Service | Purpose |
 |---|---|
-| **GlusterFS** | Distributed/replicated storage across all media-nodes |
-| **Syncthing** | Receives media from main-node in receive-only mode |
-| **Nginx** | Caching reverse proxy for cinemafred HLS — fetches from main-node on miss, serves from local cache on hit |
-| **Cloudflare Tunnel** | `node-<hostname>.rickermedia.com` — used by the cinemafred.com Worker to route traffic to this edge |
-| **Prefetch daemon** | Watches Nginx access log; when an HLS playlist is requested, pre-fetches all referenced segments into cache |
-| **KV registration timer** | Every 90s: geolocates this node by its public IP and writes `{url, lat, lon}` to Cloudflare Workers KV with a 120s TTL |
+| **Nginx** | Caching reverse proxy for cinemafred HLS — fetches from main-node on miss, serves from local disk on hit, LRU-evicts when full |
+| **Prefetch daemon** | On playlist request, immediately fetches all referenced segments into cache |
+| **Cloudflare Tunnel** | `node-<hostname>.rickermedia.com` — used by the cinemafred.com Worker to route traffic here |
+| **KV registration timer** | Every 90s: geolocates this node and writes `{url, lat, lon}` to Cloudflare Workers KV with a 120s TTL |
+| **Kiosk** | Fullscreen app launcher (Feishin, jellyfin-media-player, FreeTube, Chromium) — see TV Kiosk section |
 
 ---
 
@@ -92,13 +90,13 @@ Jellyfin runs on main-node and is reachable two ways:
 ```
 http://main-node.headnet.local:8096
 ```
-Install the Tailscale app, log into your Headscale instance, and Jellyfin is reachable anywhere — no port forwarding. The Jellyfin apps exist for iOS, Android, Android TV, Apple TV, Fire TV, Roku, and desktop.
+Install the Tailscale app, authenticate with Headscale, and Jellyfin is reachable anywhere — no port forwarding. Apps exist for iOS, Android, Android TV, Apple TV, Fire TV, Roku, and desktop.
 
 **Publicly via Cloudflare Tunnel:**
 ```
 https://jellyfin.rickermedia.com
 ```
-No Tailscale needed. Jellyfin's own login screen is the auth layer. Cloudflare Tunnel forwards requests from Cloudflare's edge to main-node's Jellyfin — no inbound ports opened. Useful for devices where you can't install Tailscale, or for sharing access with family.
+No Tailscale needed. Jellyfin's own login screen is the auth layer. Useful for family members or devices where Tailscale isn't installed.
 
 Main-node's iGPU (Intel Iris Plus 655) handles hardware transcoding via VAAPI — clients that can't play the source format natively get a transcoded stream without CPU overhead.
 
@@ -114,46 +112,30 @@ Visitor (Rochester)
       sorts nodes by distance to visitor
       tries roc-node first (nearest, cache likely warm)
       falls back to ny-node, la-node, main-node in distance order
-  → roc-node Nginx (cache hit → served immediately)
+  → roc-node Nginx (cache hit → served from local disk immediately)
                     (cache miss → fetched from main-node over Tailscale, cached, served)
 ```
 
-The Worker reads node coordinates from Cloudflare Workers KV — nodes self-register, nothing is hardcoded (see CDN section below).
+The Worker reads node coordinates from Cloudflare Workers KV — nodes self-register on boot, nothing is hardcoded.
 
 ---
 
-## File Sync and Distribution
+## Getting Media onto main-node
 
-### main-node → media-nodes (Syncthing)
+All media lives on main-node's local disk. The simplest way to transfer content from a personal computer is `rsync` over Tailscale — no extra software needed since SSH is already running:
 
-Main-node shares three folders in send-only mode. Media-nodes pull from it in receive-only mode, writing onto their GlusterFS `private-vol`:
+```bash
+# Music (ripped CDs, downloads)
+rsync -av ~/Music/ fred@main-node.headnet.local:/data/music/
 
-```
-main-node /data/music   ──sendonly──▶  media-node /data/private/music
-main-node /data/movies  ──sendonly──▶  media-node /data/private/movies
-main-node /data/tv      ──sendonly──▶  media-node /data/private/tv
-```
-
-Because `private-vol` is a replicated GlusterFS volume, syncing onto one media-node automatically populates all of them. Syncthing's web UI at `http://<node>.headnet.local:8384` lets you pause individual folders per-node for selective caching.
-
-Initial pairing requires adding device IDs through the Syncthing web UI on main-node — this is a one-time step per new media-node.
-
-### media-node distributed storage (GlusterFS)
-
-All media-nodes peer with each other and contribute their disks to two shared volumes:
-
-| Volume | Type | Behaviour |
-|---|---|---|
-| `private-vol` | replica N | Every media-node holds a full copy — survives any single node going offline |
-| `cinemafred-vol` | distribute | Striped across nodes — maximises total capacity for HLS segments |
-
-```
-la-node                           ny-node
-/gluster/bricks/private  ◀──────▶ /gluster/bricks/private   (full copy each)
-/gluster/bricks/cinemafred ──────  /gluster/bricks/cinemafred (striped)
+# Movies / TV
+rsync -av ~/Movies/ fred@main-node.headnet.local:/data/movies/
+rsync -av ~/TV/     fred@main-node.headnet.local:/data/tv/
 ```
 
-Both volumes mount locally at `/data/private/` and `/data/cinemafred/`. From any process, they look like regular directories — GlusterFS handles distribution and replication transparently. When an offline node comes back, GlusterFS self-heals by catching it up on anything it missed.
+Any SFTP GUI client (Cyberduck, FileZilla, Transmit) pointed at `main-node.headnet.local` also works. Jellyfin scans for new files automatically after transfer.
+
+If you want continuous background sync from a specific folder on your PC (e.g. a music downloads folder), you can install Syncthing on your PC and pair it with main-node's Syncthing — the web UI is at `http://main-node.headnet.local:8384`.
 
 ---
 
@@ -161,79 +143,65 @@ Both volumes mount locally at `/data/private/` and `/data/cinemafred/`. From any
 
 ### Edge caching (Nginx)
 
-Each media-node runs Nginx as a caching reverse proxy. On a cache miss it fetches from main-node's Nginx origin over Tailscale, caches the response locally, and serves it. Subsequent requests for the same segment are served entirely from local disk.
+Each media-node runs Nginx as a caching reverse proxy. On a cache miss it fetches from `main-node.headnet.local:8080` over Tailscale, caches the response to local disk, and serves it. Subsequent requests hit the local cache with no round-trip.
 
 ```
-Visitor → node-la.rickermedia.com → Nginx (la-node :8080)
-                                        cache hit  → serve from /var/cache/nginx/cinemafred
-                                        cache miss → fetch from main-node.headnet.local:8080
-                                                     ↓ cache + serve
+Visitor → node-la.rickermedia.com → Nginx (:8080 on la-node)
+                                      cache hit  → /var/cache/nginx/cinemafred (local disk)
+                                      cache miss → main-node.headnet.local:8080
+                                                   ↓ store in cache → serve
 ```
 
-Cache eviction is automatic: `max_size` (default 200 GB, tune per device) triggers LRU eviction when the cache fills. Segments not accessed in 30 days (`inactive`) are removed regardless of size.
+Cache is stored at `/var/cache/nginx/cinemafred` on each node's local disk — entirely independent per node, nothing is shared. `max_size` (default 200 GB, tune to ~80% of available disk) triggers automatic LRU eviction when full. Segments not accessed in 30 days are also evicted regardless of size.
 
 ### HLS prefetch daemon
 
-When a visitor requests an HLS playlist (`.m3u8`), the prefetch daemon detects it in the Nginx access log and immediately fetches all `.ts` segments referenced in the playlist into the cache — before the player asks for them. This eliminates the buffering that would otherwise occur when a cold cache serves a new viewer.
+When a visitor requests an HLS playlist (`.m3u8`), the prefetch daemon detects it in the access log and immediately fetches all `.ts` segments referenced in the playlist into the cache — before the player asks for them sequentially. This eliminates buffering for the first viewer on a cold cache.
 
 ```
 Visitor requests index.m3u8
-  → Nginx caches it (or serves from cache)
+  → Nginx caches playlist (or serves from cache)
   → prefetch daemon sees .m3u8 in access log
-  → parses playlist, fetches all .ts segments from main-node
-  → segments now in cache for this and all future viewers
+  → parses playlist, fetches all .ts segments from main-node into cache
+  → subsequent viewers served entirely from local disk
 ```
 
 ### Self-registering node discovery
 
-Nodes do not need to be manually registered anywhere. Each node runs a systemd timer every 90 seconds that:
+Each node runs a systemd timer every 90 seconds:
 
-1. Fetches its public IPv4 from `api4.ipify.org` (uses the regular internet path — not Tailscale)
-2. If the IP changed since last run, geolocates it via `ipinfo.io` and caches the result
+1. Fetches its public IPv4 from `api4.ipify.org` — uses the regular internet path, not Tailscale, so it reflects the node's real physical location
+2. If the IP changed since last run, geolocates it via `ipinfo.io` and caches the result locally (avoids repeated API calls)
 3. Writes `{"url": "https://node-<hostname>.rickermedia.com", "lat": ..., "lon": ...}` to Cloudflare Workers KV with a **120-second TTL**
 
-If a node goes offline, its KV entry expires within 2 minutes and the Worker automatically stops routing traffic to it. When it comes back online it re-registers within 90 seconds.
-
-Tailscale does not interfere: `api4.ipify.org` is a regular internet host, so the request leaves via the home router — not the Tailscale tunnel. The returned IP and its geolocation reflect the node's actual physical location.
+If a node goes offline its KV entry expires within 2 minutes and the Worker stops routing to it. When it comes back online it re-registers within 90 seconds. No manual coordination required — a new node added to `flake.nix` self-registers automatically on first boot.
 
 ### Cloudflare Worker (geographic routing)
 
 The Worker on `cinemafred.com` runs on every request:
 
-1. Reads all `node-*` keys from Workers KV — these are all currently-online nodes
-2. Uses `request.cf.latitude` / `request.cf.longitude` (Cloudflare's view of the visitor's location) to sort nodes nearest-first
-3. Tries each node in order with a 4-second timeout
-4. Returns the first successful response, tagging it with `X-Edge-Node`
+1. Reads all `node-*` keys from Workers KV (all currently-online nodes with unexpired TTLs)
+2. Sorts by distance from visitor using `request.cf.latitude` / `request.cf.longitude` (Cloudflare's geolocation of the visitor's IP)
+3. Tries each node in order with a 4-second timeout, returns the first successful response
 
-No coordinates are hardcoded in the Worker. Adding a new node anywhere in the world requires only adding it to `mediaNodes` in `flake.nix` — everything else is automatic.
-
----
-
-## cinemafred.com Deployment (Private Git Repo)
-
-The cinemafred project (web assets + HLS content) lives in a private GitHub repository. Each node that serves it has a **deploy key** (a read-only SSH keypair managed by agenix) that allows it to clone and pull from the repo.
-
-A systemd service on each node clones the repo on first boot and pulls updates. The web assets and HLS segments land in `/data/cinemafred/`, which Nginx serves directly.
-
-Credentials involved:
-- `/run/secrets/github-deploy-key` — SSH private key for the cinemafred repo (agenix)
-- `/run/secrets/cloudflare-tunnel-<name>.json` — Cloudflare Tunnel credentials (agenix)
-- `/run/secrets/cloudflare-kv-token` — Cloudflare API token for KV write access (agenix)
+No coordinates are hardcoded anywhere. Adding a node at any location requires only adding it to `mediaNodes` in `flake.nix`.
 
 ---
 
-## TV Kiosk (`desktop = true` nodes)
+## TV Kiosk
 
-Any media-node with `desktop = true` in `flake.nix` autologins as the `media` user when a display is connected and launches a fullscreen app menu via `cage` (a minimal single-app Wayland compositor — no desktop environment overhead).
+All media-nodes run a fullscreen app launcher by default. On boot, the node autologins as the `media` user and `cage` (a minimal single-app Wayland compositor) presents a menu:
 
 | Menu item | App | Notes |
 |---|---|---|
-| Music | Feishin | Connects to Jellyfin on main-node |
-| Movies & TV | jellyfin-media-player | mpv-backed; VAAPI hardware decode on the NUC's iGPU |
+| Music | Feishin | Connects to Jellyfin on main-node over Tailscale |
+| Movies & TV | jellyfin-media-player | mpv-backed; VAAPI hardware decode on the NUC's iGPU; streams from main-node |
 | YouTube | FreeTube | Native client with built-in ad blocking |
 | Cinema Fred | Chromium (kiosk) | Opens `cinemafred.com` fullscreen |
 
-Selecting an app opens it fullscreen. Closing it returns to the menu. `Ctrl+Alt+Backspace` drops to a TTY. PipeWire handles audio output over HDMI.
+Selecting an app opens it fullscreen. Closing it returns to the menu. `Ctrl+Alt+Backspace` drops to a TTY. PipeWire handles HDMI audio.
+
+No local media files are required — everything streams from main-node over Tailscale.
 
 ---
 
@@ -250,33 +218,34 @@ Selecting an app opens it fullscreen. Closing it returns to the menu. `Ctrl+Alt+
 
 ### Worker
 
-The `cinemafred-router` Worker intercepts all `cinemafred.com/*` traffic and routes it to the nearest live edge node. Deployed from `worker/` using Wrangler:
+The `cinemafred-router` Worker intercepts all `cinemafred.com/*` traffic. Deploy from `worker/`:
 
-```
+```bash
 cd worker && wrangler deploy
 ```
 
 ### Workers KV
 
-A single KV namespace (`NODES_KV`) stores the live node registry. Nodes write to it; the Worker reads from it. Both reference the same namespace ID, set in `flake.nix` (`clusterConfig.cfKvNamespaceId`) and `worker/wrangler.toml`.
+A single KV namespace (`NODES_KV`) stores the live node registry. Create once:
 
-Create the namespace once:
-```
+```bash
 wrangler kv namespace create NODES_KV
+# paste the returned id into flake.nix clusterConfig.cfKvNamespaceId
+# and into worker/wrangler.toml
 ```
 
 ---
 
 ## Secrets Management (agenix)
 
-All secrets are encrypted with each node's SSH host public key using agenix. They are decrypted at boot and available at `/run/secrets/` — never written to disk unencrypted, never committed to git.
+All secrets are encrypted with each node's SSH host public key. Decrypted at boot, available at `/run/secrets/`, never written to disk unencrypted, never committed to git.
 
-| Secret path | What it contains |
-|---|---|
-| `/run/secrets/cloudflare-tunnel-<name>.json` | Cloudflare Tunnel credential for each tunnel |
-| `/run/secrets/cloudflare-kv-token` | Cloudflare API token scoped to KV write (all nodes) |
-| `/run/secrets/github-deploy-key` | SSH private key for the cinemafred private GitHub repo |
-| `/run/secrets/headscale-private-key` | Headscale server private key (main-node only) |
+| Secret | Nodes | Purpose |
+|---|---|---|
+| `cloudflare-tunnel-<name>.json` | main-node | Tunnel credentials for jellyfin, cinemafred-origin, headscale tunnels |
+| `cloudflare-tunnel-<hostname>.json` | each media-node | Tunnel credential for that node's edge tunnel |
+| `cloudflare-kv-token` | all nodes | API token for writing to Workers KV (node registration) |
+| `github-deploy-key` | all nodes | SSH key for cloning the private cinemafred repo |
 
 ---
 
@@ -285,8 +254,8 @@ All secrets are encrypted with each node's SSH host public key using agenix. The
 ```
 flake.nix          cluster topology, clusterConfig constants, node builders
 common.nix         SSH, fred user, Tailscale client, KV registration timer (all nodes)
-main-node.nix      Jellyfin, Syncthing origin, Nginx HLS origin, Cloudflare Tunnels
-media-node.nix     GlusterFS, Syncthing receiver, Nginx edge cache, prefetch daemon, tunnel
+main-node.nix      Jellyfin, Nginx HLS origin, Cloudflare Tunnels, local /data/
+media-node.nix     Nginx edge cache, prefetch daemon, Cloudflare Tunnel
 headscale.nix      Headscale server + its Cloudflare Tunnel (main-node only)
 desktop.nix        TV kiosk — greetd + cage + Feishin/jellyfin-media-player/FreeTube/Chromium
 disko.nix          disk partitioning layout (applied to all nodes)
@@ -300,13 +269,17 @@ worker/
 
 ## Adding a New Node
 
-1. **Hardware**: install NixOS using `disko.nix`, copy an existing `hardware/` file as a starting point
-2. **Topology**: add an entry to `mediaNodes` in `flake.nix` — just IP, system, and whether it has a display:
+1. Add an entry to `mediaNodes` in `flake.nix`:
    ```nix
-   "roc-node" = { ip = "192.168.1.13"; system = "x86_64-linux"; desktop = false; };
+   "roc-node" = { ip = "192.168.1.13"; system = "x86_64-linux"; };
    ```
-3. **Secrets**: provision agenix secrets for the new node (tunnel credential, KV token, deploy key)
-4. **Cloudflare Tunnel**: `cloudflared tunnel create roc-node` → route DNS → store credential via agenix
-5. **Deploy**: `nixos-rebuild switch --flake .#roc-node --target-host root@<ip>`
+2. Create `hardware/roc-node.nix` (copy from an existing hardware file)
+3. Provision agenix secrets: tunnel credential JSON, KV token, GitHub deploy key
+4. Create the Cloudflare Tunnel:
+   ```bash
+   cloudflared tunnel create roc-node
+   cloudflared tunnel route dns roc-node node-roc-node.rickermedia.com
+   ```
+5. Deploy: `nixos-rebuild switch --flake .#roc-node --target-host root@<ip>`
 
-The node self-registers its location in KV within 90 seconds of booting. The Worker starts routing traffic to it automatically — no Worker redeployment needed.
+The node self-registers its location in Workers KV within 90 seconds. The Cloudflare Worker starts routing traffic to it automatically — no Worker redeployment needed.
