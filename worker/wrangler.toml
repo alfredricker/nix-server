@@ -1,0 +1,14 @@
+name               = "cinemafred-router"
+main               = "cinemafred.js"
+compatibility_date = "2024-09-01"
+
+[[routes]]
+pattern   = "cinemafred.com/*"
+zone_name = "cinemafred.com"
+
+# KV namespace that nodes register into.
+# Create with: wrangler kv namespace create NODES_KV
+# Then paste the returned id here and in flake.nix clusterConfig.cfKvNamespaceId
+[[kv_namespaces]]
+binding = "NODES_KV"
+id      = "REPLACE_WITH_KV_NAMESPACE_ID"
