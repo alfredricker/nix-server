@@ -1,5 +1,11 @@
 # Deployment Guide
 
+## Key commands
+Build:
+```bash
+nixos-rebuild switch --flake .#main-node --target-host root@10.0.0.64
+```
+
 ---
 
 ## Prerequisites (run once on your machine)
@@ -36,6 +42,10 @@ Generate with `mkpasswd -m sha-512`.
 ```bash
 ssh-keygen -R <ip>   # clear any stale host key
 ssh fred@<ip>
+```
+And add your authorized key to the node
+```bash
+ssh fred@10.0.0.64 "sudo mkdir -p /root/.ssh && sudo cp /etc/ssh/authorized_keys.d/fred /root/.ssh/authorized_keys"
 ```
 
 ### 3. Create Cloudflare Tunnels
@@ -81,28 +91,6 @@ nix run github:ryantm/agenix -- -e cloudflare-tunnel-cinemafred-origin.age
 nix run github:ryantm/agenix -- -e cloudflare-kv-token.age
 ```
 
-Add each secret to `secrets/secrets.nix` with the appropriate `publicKeys`:
-
-```nix
-"cloudflare-tunnel-headscale.age".publicKeys       = [ fred main-node ];
-"cloudflare-tunnel-jellyfin.age".publicKeys        = [ fred main-node ];
-"cloudflare-tunnel-cinemafred-origin.age".publicKeys = [ fred main-node ];
-"cloudflare-kv-token.age".publicKeys               = [ fred main-node ];
-```
-
-Declare the secrets in `headscale.nix` and `main-node.nix`:
-
-```nix
-age.secrets."cloudflare-tunnel-headscale" = {
-  file  = ./secrets/cloudflare-tunnel-headscale.age;
-  path  = "/run/secrets/cloudflare-tunnel-headscale.json";
-  owner = "cloudflared";
-};
-# repeat for jellyfin, cinemafred-origin, cloudflare-kv-token
-```
-
-Commit the `.age` files — they're safe to store in git.
-
 ### 5. Deploy with secrets
 
 ```bash
@@ -117,11 +105,14 @@ SSH into main-node and run:
 # Create a user
 sudo headscale users create default
 
+# Get user id (should be 1)
+sudo headscale users list
+
 # Generate a pre-auth key (repeat this step whenever you need to add a new device)
-sudo headscale preauthkeys create --expiration 24h --user default
+sudo headscale preauthkeys create --expiration 24h --user <user_id>
 
 # Connect main-node itself to Headscale
-sudo tailscale up --login-server https://headscale.rickermedia.com --authkey <key>
+sudo tailscale up --auth-key=<auth_key> --login-server=https://headscale.rickermedia.com --accept-routes
 ```
 
 main-node is now `main-node.headnet.local` on the VPN. Verify:

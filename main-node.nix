@@ -68,14 +68,12 @@
 
   # ── Secrets ───────────────────────────────────────────────────────────────
   age.secrets."cloudflare-tunnel-jellyfin" = {
-    file  = ./secrets/cloudflare-tunnel-jellyfin.age;
-    path  = "/run/secrets/cloudflare-tunnel-jellyfin.json";
-    owner = "cloudflared";
+    file = ./secrets/cloudflare-tunnel-jellyfin.age;
+    path = "/run/secrets/cloudflare-tunnel-jellyfin.json";
   };
   age.secrets."cloudflare-tunnel-cinemafred-origin" = {
-    file  = ./secrets/cloudflare-tunnel-cinemafred-origin.age;
-    path  = "/run/secrets/cloudflare-tunnel-cinemafred-origin.json";
-    owner = "cloudflared";
+    file = ./secrets/cloudflare-tunnel-cinemafred-origin.age;
+    path = "/run/secrets/cloudflare-tunnel-cinemafred-origin.json";
   };
   age.secrets."cloudflare-kv-token" = {
     file = ./secrets/cloudflare-kv-token.age;
@@ -112,6 +110,11 @@
       ingress."cinemafred-origin.rickermedia.com" = "http://127.0.0.1:8080";
     };
   };
+
+  # DynamicUser=true (cloudflared module default) prevents LoadCredential from
+  # following symlinks, which breaks agenix secrets. Run as root instead.
+  systemd.services."cloudflared-tunnel-jellyfin".serviceConfig.DynamicUser         = lib.mkForce false;
+  systemd.services."cloudflared-tunnel-cinemafred-origin".serviceConfig.DynamicUser = lib.mkForce false;
 
   # ── Firewall ──────────────────────────────────────────────────────────────
   # Port 22 and Tailscale UDP are opened by common.nix.
