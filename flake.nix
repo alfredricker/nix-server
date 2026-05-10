@@ -5,8 +5,10 @@
   inputs.nixos-hardware.url = "github:NixOS/nixos-hardware";
   inputs.disko.url          = "github:nix-community/disko";
   inputs.disko.inputs.nixpkgs.follows = "nixpkgs";
+  inputs.agenix.url         = "github:ryantm/agenix";
+  inputs.agenix.inputs.nixpkgs.follows = "nixpkgs";
 
-  outputs = { self, nixpkgs, nixos-hardware, disko }:
+  outputs = { self, nixpkgs, nixos-hardware, disko, agenix }:
     let
       # ── Cluster-wide constants ─────────────────────────────────────────────
       #
@@ -18,8 +20,8 @@
       #                  then paste the returned id here and in wrangler.toml
       clusterConfig = {
         headscaleUrl    = "https://headscale.rickermedia.com";
-        cfAccountId     = "REPLACE_WITH_CF_ACCOUNT_ID";
-        cfKvNamespaceId = "REPLACE_WITH_KV_NAMESPACE_ID";
+        cfAccountId     = "17eb349fd2bf73bcaa03d603e8152f91";
+        cfKvNamespaceId = "cf786905cd1a44c78f06eabbe58f82dc";
       };
 
       # ── Cluster topology ──────────────────────────────────────────────────
@@ -61,6 +63,7 @@
           system      = nodeCfg.system;
           specialArgs = { inherit hostname clusterConfig; };
           modules     = hardwareModules hostname ++ [
+            agenix.nixosModules.default
             ./common.nix
             ./main-node.nix
             ./headscale.nix
@@ -77,6 +80,7 @@
               (builtins.filter (n: n != hostname) (builtins.attrNames mediaNodes));
           };
           modules = hardwareModules hostname ++ [
+            agenix.nixosModules.default
             ./common.nix
             ./media-node.nix
           ] ++ nixpkgs.lib.optional (nodeCfg.desktop or false) ./desktop.nix;

@@ -77,6 +77,23 @@ export default {
       }
     }
 
+    // All edge nodes failed — fall back to the origin on main-node.
+    try {
+      const origin = await fetch(`https://cinemafred-origin.rickermedia.com${path}`, {
+        method:  request.method,
+        headers: request.headers,
+        body:    request.method !== "GET" && request.method !== "HEAD"
+                   ? request.body
+                   : undefined,
+        signal: AbortSignal.timeout(8000),
+      });
+      if (origin.ok || origin.status === 304 || origin.status === 206) {
+        const out = new Response(origin.body, origin);
+        out.headers.set("X-Edge-Node", "main-node (origin fallback)");
+        return out;
+      }
+    } catch {}
+
     return new Response("All nodes unavailable", { status: 503 });
   },
 };

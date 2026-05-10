@@ -66,6 +66,22 @@
     };
   };
 
+  # ── Secrets ───────────────────────────────────────────────────────────────
+  age.secrets."cloudflare-tunnel-jellyfin" = {
+    file  = ./secrets/cloudflare-tunnel-jellyfin.age;
+    path  = "/run/secrets/cloudflare-tunnel-jellyfin.json";
+    owner = "cloudflared";
+  };
+  age.secrets."cloudflare-tunnel-cinemafred-origin" = {
+    file  = ./secrets/cloudflare-tunnel-cinemafred-origin.age;
+    path  = "/run/secrets/cloudflare-tunnel-cinemafred-origin.json";
+    owner = "cloudflared";
+  };
+  age.secrets."cloudflare-kv-token" = {
+    file = ./secrets/cloudflare-kv-token.age;
+    path = "/run/secrets/cloudflare-kv-token";
+  };
+
   # ── Cloudflare Tunnels ────────────────────────────────────────────────────
   #
   # jellyfin.rickermedia.com  → Jellyfin (direct, no CDN routing needed)
@@ -93,7 +109,7 @@
     tunnels."cinemafred-origin" = {
       credentialsFile = "/run/secrets/cloudflare-tunnel-cinemafred-origin.json";
       default         = "http_status:404";
-      ingress."node-main.rickermedia.com" = "http://127.0.0.1:8080";
+      ingress."cinemafred-origin.rickermedia.com" = "http://127.0.0.1:8080";
     };
   };
 

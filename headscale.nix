@@ -53,6 +53,13 @@
   # headscale CLI available to fred for key/node management
   environment.systemPackages = [ pkgs.headscale ];
 
+  # ── Secrets ───────────────────────────────────────────────────────────────
+  age.secrets."cloudflare-tunnel-headscale" = {
+    file  = ./secrets/cloudflare-tunnel-headscale.age;
+    path  = "/run/secrets/cloudflare-tunnel-headscale.json";
+    owner = "cloudflared";
+  };
+
   # ── Cloudflare Tunnel (Headscale control plane) ───────────────────────────
   services.cloudflared.tunnels."headscale" = {
     credentialsFile = "/run/secrets/cloudflare-tunnel-headscale.json";
