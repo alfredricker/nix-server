@@ -33,7 +33,7 @@
       #              Set desktop = true for any node plugged into a TV.
       #              Each node self-registers its location — no coordinates needed here.
       mainNode = {
-        "main-node" = { ip = "192.168.1.10"; system = "x86_64-linux"; };
+        "main-node" = { ip = "10.0.0.64"; system = "x86_64-linux"; };
       };
 
       mediaNodes = {

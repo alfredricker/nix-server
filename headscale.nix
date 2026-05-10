@@ -7,16 +7,24 @@
 #   2. Generate authkey: headscale preauthkeys create --expiration 1h --user <id>
 #   3. On each node:     tailscale up --login-server https://headscale.rickermedia.com \
 #                                     --auth-key <key> --accept-routes
+#
+# Prerequisites before first deploy:
+#   - headscale.rickermedia.com set to DNS-only (grey cloud) in Cloudflare dashboard
+#   - Router forwarding ports 80 and 443 to 10.0.0.64
+#   - DDNS token provisioned: agenix -e secrets/cloudflare-ddns-token.age
 
 {
   # ── Headscale server ──────────────────────────────────────────────────────
   services.headscale = {
     enable  = true;
-    address = "127.0.0.1";
-    port    = 8085;
+    address = "0.0.0.0";
+    port    = 443;
 
     settings = {
       server_url = "https://headscale.rickermedia.com";
+
+      tls_letsencrypt_hostname       = "headscale.rickermedia.com";
+      tls_letsencrypt_challenge_type = "TLS-ALPN-01";
 
       dns = {
         base_domain = "headnet.local";
@@ -34,24 +42,33 @@
     };
   };
 
+  # headscale runs as an unprivileged user — needs this to bind to port 443
+  systemd.services.headscale.serviceConfig.AmbientCapabilities = [ "CAP_NET_BIND_SERVICE" ];
+
   # headscale CLI available to fred for key/node management
   environment.systemPackages = [ pkgs.headscale ];
 
-  # ── Secrets ───────────────────────────────────────────────────────────────
-  age.secrets."cloudflare-tunnel-headscale" = {
-    file = ./secrets/cloudflare-tunnel-headscale.age;
-    path = "/run/secrets/cloudflare-tunnel-headscale.json";
+  # ── Cloudflare DDNS ───────────────────────────────────────────────────────
+  # Keeps headscale.rickermedia.com pointed at the home IP after changes.
+  # Token must have Zone:DNS:Edit scope for rickermedia.com.
+  age.secrets."cloudflare-ddns-token" = {
+    file = ./secrets/cloudflare-ddns-token.age;
+    path = "/run/secrets/cloudflare-ddns-token";
   };
 
-  # ── Cloudflare Tunnel ─────────────────────────────────────────────────────
-  # Uses http2:// so cloudflared connects to headscale over HTTP/2 cleartext,
-  # which supports RFC 8441 extended CONNECT for protocol upgrades — avoiding
-  # the HTTP/1.1 Upgrade header stripping issue.
-  services.cloudflared.tunnels."headscale" = {
-    credentialsFile = "/run/secrets/cloudflare-tunnel-headscale.json";
-    default         = "http_status:404";
-    ingress."headscale.rickermedia.com" = "http2://127.0.0.1:8085";
+  services.cloudflare-dyndns = {
+    enable       = true;
+    apiTokenFile = config.age.secrets."cloudflare-ddns-token".path;
+    domains      = [ "headscale.rickermedia.com" ];
+    proxied      = false;
+    ipv6         = false;
   };
 
-  systemd.services."cloudflared-tunnel-headscale".serviceConfig.DynamicUser = lib.mkForce false;
+  # Resolve headscale.rickermedia.com locally so main-node's tailscale does not
+  # round-trip through the router (avoids hairpin NAT on port 443).
+  networking.extraHosts = "127.0.0.1 headscale.rickermedia.com";
+
+  # ── Firewall ──────────────────────────────────────────────────────────────
+  # 443 — headscale TLS (Tailscale TS2021 handshake + TLS-ALPN-01 cert renewal)
+  networking.firewall.allowedTCPPorts = [ 443 ];
 }

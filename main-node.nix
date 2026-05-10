@@ -116,6 +116,14 @@
   systemd.services."cloudflared-tunnel-jellyfin".serviceConfig.DynamicUser         = lib.mkForce false;
   systemd.services."cloudflared-tunnel-cinemafred-origin".serviceConfig.DynamicUser = lib.mkForce false;
 
+  # ── Static IP ─────────────────────────────────────────────────────────────
+  networking.interfaces.eno1.ipv4.addresses = [{
+    address      = "10.0.0.64";
+    prefixLength = 24;
+  }];
+  networking.defaultGateway = "10.0.0.1";
+  networking.nameservers    = [ "1.1.1.1" "1.0.0.1" ];
+
   # ── Firewall ──────────────────────────────────────────────────────────────
   # Port 22 and Tailscale UDP are opened by common.nix.
   # Jellyfin's openFirewall covers 8096/8920.
