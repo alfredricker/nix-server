@@ -74,12 +74,12 @@ in
   # ── GPU (Intel UHD / Iris Plus on all NUC8s) ──────────────────────────────
   hardware.graphics.enable = true;
 
-  # ── Tailscale client → self-hosted Headscale ──────────────────────────────
+  # ── Tailscale client ──────────────────────────────────────────────────────
   services.tailscale.enable = true;
   networking.firewall.trustedInterfaces = [ "tailscale0" ];
 
-  systemd.services.tailscale-headscale-login = {
-    description = "Connect Tailscale client to Headscale control plane";
+  systemd.services.tailscale-login = {
+    description = "Connect Tailscale client to Tailscale control plane";
     after    = [ "tailscaled.service" "network-online.target" ];
     requires = [ "tailscaled.service" ];
     wants    = [ "network-online.target" ];
@@ -92,9 +92,7 @@ in
       state=$(${pkgs.tailscale}/bin/tailscale status --json 2>/dev/null \
         | grep -o '"BackendState":"[^"]*"' | cut -d'"' -f4)
       if [ "$state" != "Running" ]; then
-        ${pkgs.tailscale}/bin/tailscale up \
-          --login-server=${clusterConfig.headscaleUrl} \
-          --accept-routes
+        ${pkgs.tailscale}/bin/tailscale up --accept-routes
       fi
     '';
   };

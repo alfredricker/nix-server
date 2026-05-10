@@ -19,7 +19,6 @@
       # cfKvNamespaceId: run `wrangler kv namespace create NODES_KV` to create,
       #                  then paste the returned id here and in wrangler.toml
       clusterConfig = {
-        headscaleUrl    = "https://headscale.rickermedia.com";
         cfAccountId     = "17eb349fd2bf73bcaa03d603e8152f91";
         cfKvNamespaceId = "cf786905cd1a44c78f06eabbe58f82dc";
       };
@@ -66,7 +65,6 @@
             agenix.nixosModules.default
             ./common.nix
             ./main-node.nix
-            ./headscale.nix
           ];
         };
 

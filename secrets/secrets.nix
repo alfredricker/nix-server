@@ -13,7 +13,6 @@ let
   allNodes = [ main-node ];
 in
 {
-  "cloudflare-ddns-token.age".publicKeys               = [ fred main-node ];
   "cloudflare-tunnel-jellyfin.age".publicKeys          = [ fred main-node ];
   "cloudflare-tunnel-cinemafred-origin.age".publicKeys = [ fred main-node ];
   "cloudflare-kv-token.age".publicKeys                 = [ fred main-node ];
