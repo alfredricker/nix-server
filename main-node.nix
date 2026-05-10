@@ -2,7 +2,6 @@
 
 # Central node: authoritative data store, Jellyfin server, Syncthing origin,
 # cinemafred HLS origin. Not a GlusterFS peer — data lives on local storage.
-# Headscale control plane is added via headscale.nix (always imported for main-node).
 
 {
   # ── Local data directories ─────────────────────────────────────────────────
@@ -96,7 +95,6 @@
   #   cloudflared tunnel route dns cinemafred-origin node-main.rickermedia.com
   #
   # cinemafred.com itself is handled by a Cloudflare Worker (see worker/).
-  # Headscale tunnel is in headscale.nix.
   services.cloudflared = {
     enable = true;
     tunnels."jellyfin" = {

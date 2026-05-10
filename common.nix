@@ -1,6 +1,6 @@
 # Received via flake.nix specialArgs:
 #   hostname      – this node's hostname
-#   clusterConfig – cluster-wide constants (headscaleUrl, cfAccountId, cfKvNamespaceId)
+#   clusterConfig – cluster-wide constants (cfAccountId, cfKvNamespaceId)
 { config, pkgs, lib, hostname, clusterConfig, ... }:
 
 # Applies to every node in the cluster (main-node and media-nodes).
