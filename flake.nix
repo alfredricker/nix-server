@@ -36,9 +36,9 @@
       };
 
       mediaNodes = {
-        # "la-node"  = { ip = "192.168.1.11"; system = "x86_64-linux"; desktop = true;  };
-        # "ny-node"  = { ip = "192.168.1.12"; system = "x86_64-linux"; desktop = false; };
-        # "roc-node" = { ip = "192.168.1.13"; system = "x86_64-linux"; desktop = false; };
+        # "la-node"  = { system = "x86_64-linux"; desktop = true;  };
+        # "ny-node"  = { system = "x86_64-linux"; desktop = false; };
+        # "roc-node" = { system = "x86_64-linux"; desktop = false; };
       };
 
       # ── Shared NixOS hardware baseline (all nodes are NUC8 BEH) ──────────
@@ -71,12 +71,7 @@
       mkMediaNode = hostname: nodeCfg:
         nixpkgs.lib.nixosSystem {
           system      = nodeCfg.system;
-          specialArgs = {
-            inherit hostname clusterConfig;
-            peerIPs = builtins.map
-              (n: mediaNodes.${n}.ip)
-              (builtins.filter (n: n != hostname) (builtins.attrNames mediaNodes));
-          };
+          specialArgs = { inherit hostname clusterConfig; };
           modules = hardwareModules hostname ++ [
             agenix.nixosModules.default
             ./common.nix

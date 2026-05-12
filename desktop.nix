@@ -14,10 +14,10 @@ let
   # Absolute paths avoid relying on PATH inside the cage environment.
   launcher = pkgs.writeShellScriptBin "kiosk-launcher" ''
     while true; do
-      choice=$(printf 'Music\nMovies & TV\nYouTube\nCinema Fred' \
+      choice=$(printf 'Music\nMovies & TV\nYouTube\nCinema Fred\nWi-Fi' \
         | ${pkgs.bemenu}/bin/bemenu \
             --prompt "  " \
-            --list 4 \
+            --list 5 \
             --line-height 64 \
             --fn "Noto Sans 26" \
             --nb "#0d0d0d" --nf "#cccccc" \
@@ -43,11 +43,24 @@ let
             --noerrdialogs \
             --disable-session-crashed-bubble
           ;;
+        "Wi-Fi")
+          ${pkgs.iwgtk}/bin/iwgtk
+          ;;
       esac
     done
   '';
 in
 {
+  # ── Session ───────────────────────────────────────────────────────────────
+  # ── WiFi ──────────────────────────────────────────────────────────────────
+  # iwd manages WiFi; EnableNetworkConfiguration lets it handle DHCP itself
+  # so NetworkManager is not needed. iwgtk provides the graphical frontend
+  # launched from the kiosk menu.
+  networking.wireless.iwd = {
+    enable = true;
+    settings.General.EnableNetworkConfiguration = true;
+  };
+
   # ── Session ───────────────────────────────────────────────────────────────
   # cage runs exactly one Wayland client fullscreen — perfect for a kiosk.
   # -s passes through Ctrl+Alt+Backspace so you can escape to TTY if needed.
@@ -86,5 +99,6 @@ in
     jellyfin-media-player # mpv-backed Jellyfin client, auto-uses VAAPI
     freetube             # native YouTube client with built-in ad blocking
     chromium             # for cinemafred.com kiosk tab
+    iwgtk                # graphical WiFi manager for iwd
   ];
 }

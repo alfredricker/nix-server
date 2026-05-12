@@ -1,7 +1,6 @@
 # Received via flake.nix specialArgs:
 #   hostname  – this node's hostname
-#   peerIPs   – reserved for future use (kept for API compatibility)
-{ config, pkgs, lib, hostname, peerIPs, ... }:
+{ config, pkgs, lib, hostname, ... }:
 
 # Media node: cinemafred CDN edge + optional TV kiosk.
 #

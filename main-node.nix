@@ -6,10 +6,12 @@
 {
   # ── Local data directories ─────────────────────────────────────────────────
   systemd.tmpfiles.rules = [
-    "d /data/music       0770 jellyfin jellyfin -"
-    "d /data/movies      0770 jellyfin jellyfin -"
-    "d /data/tv          0770 jellyfin jellyfin -"
-    "d /data/cinemafred  0755 nginx    nginx    -"
+    "d /data                0755 root      root      -"
+    "d /data/music          0770 jellyfin  jellyfin  -"
+    "d /data/movies         0770 jellyfin  jellyfin  -"
+    "d /data/tv             0770 jellyfin  jellyfin  -"
+    "d /data/cinemafred     0755 nginx     nginx     -"
+    "d /var/lib/syncthing   0700 syncthing syncthing -"
   ];
 
   # ── Jellyfin ──────────────────────────────────────────────────────────────
@@ -21,6 +23,7 @@
     openFirewall = true;
   };
   users.users.jellyfin.extraGroups = [ "render" "video" ];
+  users.users.fred.extraGroups     = [ "wheel" "jellyfin" ];
 
   # ── Syncthing (send-only origin for media-nodes) ──────────────────────────
   #
@@ -33,7 +36,7 @@
   services.syncthing = {
     enable    = true;
     user      = "syncthing";
-    dataDir   = "/data";
+    dataDir   = "/var/lib/syncthing";
     configDir = "/var/lib/syncthing";
     settings.folders = {
       "media-music"  = { path = "/data/music";  type = "sendonly"; devices = []; };
