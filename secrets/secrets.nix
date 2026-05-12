@@ -9,11 +9,14 @@ let
 
   # Your personal key — allows you to re-encrypt secrets from your machine.
   fred = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIME9Bmh6fg68kew2hciqg+gKIqhw0/vBB76i7UQlkAIE";
+  # media node 1
+  freds-node = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA4vosrFkfvLRcdKzIuXGbG78OhZ+RUs4fhuNE8X/nfP";
 
-  allNodes = [ main-node ];
+  allNodes = [ main-node freds-node ];
 in
 {
   "cloudflare-tunnel-jellyfin.age".publicKeys          = [ fred main-node ];
   "cloudflare-tunnel-cinemafred-origin.age".publicKeys = [ fred main-node ];
-  "cloudflare-kv-token.age".publicKeys                 = [ fred main-node ];
+  "cloudflare-kv-token.age".publicKeys                 = [ fred main-node freds-node ];
+  "cloudflare-tunnel-freds-node.age".publicKeys        = [ fred freds-node ];
 }
