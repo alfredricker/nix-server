@@ -82,8 +82,13 @@ in
         access_log /var/log/nginx/cinemafred-access.log;
       '';
       locations."/" = {
-        proxyPass = "http://main-node.headnet.local:8080";
         extraConfig = ''
+          # Resolve via Tailscale MagicDNS at request time, not nginx startup.
+          # Without this nginx refuses to start if Tailscale isn't up yet.
+          resolver 100.100.100.100 valid=30s;
+          set $origin "main-node.headnet.local";
+          proxy_pass http://$origin:8080;
+
           proxy_cache              cinemafred_cache;
           proxy_cache_valid        200 206 30d;
           proxy_cache_use_stale    error timeout updating
