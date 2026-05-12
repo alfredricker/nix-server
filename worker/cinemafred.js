@@ -23,27 +23,37 @@ function distanceKm(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Module-level cache — shared across requests on the same Worker instance.
+// Avoids hitting KV on every .ts segment fetch during active streaming.
+let cachedNodes    = null;
+let cacheExpiresAt = 0;
+const CACHE_TTL_MS = 30_000;
+
+async function getNodes(env) {
+  if (cachedNodes && Date.now() < cacheExpiresAt) return cachedNodes;
+
+  // Node data is stored as KV metadata, so list() returns everything in one
+  // operation — no individual get() calls needed.
+  const { keys } = await env.NODES_KV.list({ prefix: "node-" });
+  const nodes = keys
+    .map(({ name, metadata }) => (metadata ? { name, ...metadata } : null))
+    .filter(n => n?.url && n?.lat != null && n?.lon != null);
+
+  cachedNodes    = nodes;
+  cacheExpiresAt = Date.now() + CACHE_TTL_MS;
+  return nodes;
+}
+
 export default {
   async fetch(request, env) {
     const { latitude, longitude } = request.cf ?? {};
     const path = new URL(request.url).pathname + new URL(request.url).search;
 
-    // Discover all currently-online nodes from KV.
-    // Stale entries (offline nodes) have already expired via TTL.
-    const { keys } = await env.NODES_KV.list({ prefix: "node-" });
+    const nodes = await getNodes(env);
 
-    if (keys.length === 0) {
+    if (nodes.length === 0) {
       return new Response("No nodes available", { status: 503 });
     }
-
-    const nodes = (
-      await Promise.all(
-        keys.map(async ({ name }) => {
-          const val = await env.NODES_KV.get(name, { type: "json" });
-          return val ? { name, ...val } : null;
-        })
-      )
-    ).filter(n => n?.url && n?.lat != null && n?.lon != null);
 
     // Sort nearest-first. If Cloudflare can't determine visitor coordinates
     // (extremely rare), fall back to arbitrary order.

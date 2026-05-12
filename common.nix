@@ -60,13 +60,14 @@ let
         --argjson lon "$LON"  \
         '{"url": $url, "lat": $lat, "lon": $lon}')
 
-      # Write to KV with 120s TTL — if this node stops running, entry expires
-      # and the Worker drops it from the routing pool automatically
+      # Write to KV with 120s TTL.
+      # Data is stored as metadata so the Worker's list() returns everything
+      # in one KV operation instead of one get() per node.
       curl -sf --max-time 10 \
         -X PUT "$KV_URL?expiration_ttl=120" \
         -H "Authorization: Bearer $CF_TOKEN" \
-        -H "Content-Type: application/json" \
-        -d "$PAYLOAD"
+        -F "metadata=$PAYLOAD" \
+        -F "value="
     '';
   };
 in

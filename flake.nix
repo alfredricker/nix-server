@@ -36,6 +36,7 @@
       };
 
       mediaNodes = {
+        "freds-node" = { system = "x86_64-linux"; desktop = true; };
         # "la-node"  = { system = "x86_64-linux"; desktop = true;  };
         # "ny-node"  = { system = "x86_64-linux"; desktop = false; };
         # "roc-node" = { system = "x86_64-linux"; desktop = false; };
