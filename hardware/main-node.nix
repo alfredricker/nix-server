@@ -18,13 +18,14 @@
   boot.kernelModules = [ "kvm-intel" ];
 
   # ── Network ───────────────────────────────────────────────────────────────
-  # Wired: Intel I219V GbE. The interface name (eno1 / enp0s31f6 / etc.)
-  # is assigned by the kernel — verify with `ip link` from the installer.
-  networking.interfaces.eno1.useDHCP = lib.mkDefault true;
-
-  # Wireless (Intel Wireless-AC 9560) — enable if needed.
-  # The firmware is pulled in by hardware.enableRedistributableFirmware below.
-  # networking.interfaces.wlp0s20f3.useDHCP = lib.mkDefault true;
+  # Static IP so main-node is always reachable at a known address and can't
+  # be confused with a media-node during deploys.
+  networking.interfaces.eno1 = {
+    useDHCP = false;
+    ipv4.addresses = [{ address = "10.0.0.64"; prefixLength = 24; }];
+  };
+  networking.defaultGateway = "10.0.0.1";
+  networking.nameservers    = [ "1.1.1.1" "8.8.8.8" ];
 
   # ── Firmware ──────────────────────────────────────────────────────────────
   # Includes iwlwifi firmware for the AC 9560 and any Intel ME blobs.
