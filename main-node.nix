@@ -13,6 +13,12 @@
       name             = "cinemafred";
       ensureDBOwnership = true;
     }];
+    authentication = pkgs.lib.mkOverride 10 ''
+    # TYPE  DATABASE    USER        ADDRESS      METHOD
+    local   all         postgres                 peer
+    local   cinemafred  cinemafred               peer
+    host    cinemafred  cinemafred  127.0.0.1/32 scram-sha-256
+    '';
   };
 
   # Set the cinemafred role password from an agenix secret each boot.
