@@ -19,4 +19,5 @@ in
   "cloudflare-tunnel-cinemafred-origin.age".publicKeys = [ fred main-node ];
   "cloudflare-kv-token.age".publicKeys                 = [ fred main-node freds-node ];
   "cloudflare-tunnel-freds-node.age".publicKeys        = [ fred freds-node ];
+  "postgres-cinemafred-password.age".publicKeys        = [ fred main-node ];
 }

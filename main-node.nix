@@ -4,6 +4,41 @@
 # cinemafred HLS origin. Not a GlusterFS peer — data lives on local storage.
 
 {
+  # ── PostgreSQL ────────────────────────────────────────────────────────────
+  services.postgresql = {
+    enable  = true;
+    package = pkgs.postgresql_16;
+    ensureDatabases = [ "cinemafred" ];
+    ensureUsers = [{
+      name             = "cinemafred";
+      ensureDBOwnership = true;
+    }];
+  };
+
+  # Set the cinemafred role password from an agenix secret each boot.
+  # The secret must be owned by postgres so the service can read it.
+  age.secrets."postgres-cinemafred-password" = {
+    file  = ./secrets/postgres-cinemafred-password.age;
+    path  = "/run/secrets/postgres-cinemafred-password";
+    owner = "postgres";
+  };
+
+  systemd.services.cinemafred-db-password = {
+    description = "Apply cinemafred PostgreSQL role password";
+    after       = [ "postgresql.service" ];
+    requires    = [ "postgresql.service" ];
+    wantedBy    = [ "multi-user.target" ];
+    serviceConfig = {
+      Type            = "oneshot";
+      RemainAfterExit = true;
+      User            = "postgres";
+    };
+    script = ''
+      ${config.services.postgresql.package}/bin/psql \
+        -c "ALTER ROLE cinemafred WITH PASSWORD '$(cat /run/secrets/postgres-cinemafred-password)'"
+    '';
+  };
+
   # ── Local data directories ─────────────────────────────────────────────────
   systemd.tmpfiles.rules = [
     "d /data                0755 root      root      -"
