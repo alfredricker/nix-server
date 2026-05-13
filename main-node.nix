@@ -152,6 +152,9 @@
   systemd.services."cloudflared-tunnel-jellyfin".serviceConfig.DynamicUser         = lib.mkForce false;
   systemd.services."cloudflared-tunnel-cinemafred-origin".serviceConfig.DynamicUser = lib.mkForce false;
 
+  # ── Packages ──────────────────────────────────────────────────────────────
+  environment.systemPackages = with pkgs; [ git ];
+
   # ── Static IP ─────────────────────────────────────────────────────────────
   networking.interfaces.eno1.ipv4.addresses = [{
     address      = "10.0.0.64";
