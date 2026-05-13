@@ -4,6 +4,12 @@
 # cinemafred HLS origin. Not a GlusterFS peer — data lives on local storage.
 
 {
+  # ── Storage ───────────────────────────────────────────────────────────────
+  fileSystems."/data" = {
+    device  = "/dev/disk/by-id/ata-WDC_WD140EDGZ-11CMYA0_T1G4XKUN-part1";
+    fsType  = "ext4";
+    options = [ "defaults" "nofail" ];
+  };
   # ── PostgreSQL ────────────────────────────────────────────────────────────
   services.postgresql = {
     enable  = true;
@@ -31,7 +37,7 @@
 
   systemd.services.cinemafred-db-password = {
     description = "Apply cinemafred PostgreSQL role password";
-    after       = [ "postgresql.service" ];
+    after       = [ "postgresql.service" "postgresql-setup.service" ];
     requires    = [ "postgresql.service" ];
     wantedBy    = [ "multi-user.target" ];
     serviceConfig = {

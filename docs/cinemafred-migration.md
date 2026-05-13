@@ -36,7 +36,7 @@ rsync cinemafred-neon.sql fred@main-node:/tmp/
 
 # SSH in and restore
 ssh fred@main-node
-sudo -u cinemafred psql -d cinemafred < /tmp/cinemafred-neon.sql
+sudo -u postgres psql -d cinemafred < /tmp/cinemafred-neon.sql
 rm /tmp/cinemafred-neon.sql
 ```
 
