@@ -73,7 +73,10 @@ let
 in
 {
   # ── GPU (Intel UHD / Iris Plus on all NUC8s) ──────────────────────────────
-  hardware.graphics.enable = true;
+  hardware.graphics = {
+    enable        = true;
+    extraPackages = with pkgs; [ intel-media-driver ];
+  };
 
   # ── Tailscale client ──────────────────────────────────────────────────────
   services.tailscale.enable = true;
