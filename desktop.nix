@@ -1,93 +1,57 @@
 { config, pkgs, lib, ... }:
 
-# Lightweight kiosk desktop for TV-attached nodes.
+# LXQt desktop for TV-attached nodes.
 #
-# Stack: greetd → cage (single-app Wayland compositor) → kiosk-launcher
-#
-# The launcher is a looping bemenu menu. Selecting an app opens it fullscreen;
-# closing it returns to the menu. When no display is connected greetd will
-# retry cage on a backoff — server services are unaffected.
-#
-# Plug in a TV → autologin fires → menu appears. That's it.
+# Stack: LightDM → LXQt → app grid
+# WiFi managed by iwd + iwgtk. On-screen keyboard via onboard.
 
 let
-  # Absolute paths avoid relying on PATH inside the cage environment.
-  launcher = pkgs.writeShellScriptBin "kiosk-launcher" ''
-    while true; do
-      choice=$(printf 'Music\nMovies & TV\nYouTube\nCinema Fred\nWi-Fi' \
-        | ${pkgs.bemenu}/bin/bemenu \
-            --prompt "  " \
-            --list 5 \
-            --line-height 64 \
-            --fn "Noto Sans 26" \
-            --nb "#0d0d0d" --nf "#cccccc" \
-            --hb "#3584e4" --hf "#ffffff" \
-            --center \
-            --width-factor 0.3)
-      case "$choice" in
-        "Music")
-          ${pkgs.feishin}/bin/feishin
-          ;;
-        "Movies & TV")
-          ${pkgs.jellyfin-media-player}/bin/jellyfinmediaplayer
-          ;;
-        "YouTube")
-          ${pkgs.freetube}/bin/freetube
-          ;;
-        "Cinema Fred")
-          ${pkgs.chromium}/bin/chromium \
-            --ozone-platform=wayland \
-            --kiosk \
-            --app=https://cinemafred.com \
-            --disable-infobars \
-            --noerrdialogs \
-            --disable-session-crashed-bubble
-          ;;
-        "Wi-Fi")
-          ${pkgs.iwgtk}/bin/iwgtk
-          ;;
-      esac
-    done
-  '';
+  cinemaFredApp = pkgs.symlinkJoin {
+    name  = "cinemafred-launcher";
+    paths = [
+      (pkgs.makeDesktopItem {
+        name        = "cinemafred";
+        desktopName = "CinemaFred";
+        exec        = "${pkgs.chromium}/bin/chromium --app=https://cinemafred.com --disable-infobars --noerrdialogs --disable-session-crashed-bubble";
+        icon        = "cinemafred";
+        categories  = [ "AudioVideo" "Video" ];
+      })
+      (pkgs.runCommand "cinemafred-icon" {} ''
+        mkdir -p $out/share/icons/hicolor/scalable/apps
+        cp ${./assets/cinemafred.svg} $out/share/icons/hicolor/scalable/apps/cinemafred.svg
+      '')
+    ];
+  };
 in
 {
-  # ── Session ───────────────────────────────────────────────────────────────
   # ── WiFi ──────────────────────────────────────────────────────────────────
-  # iwd manages WiFi; EnableNetworkConfiguration lets it handle DHCP itself
-  # so NetworkManager is not needed. iwgtk provides the graphical frontend
-  # launched from the kiosk menu.
   networking.wireless.iwd = {
     enable = true;
     settings.General.EnableNetworkConfiguration = true;
   };
 
   # ── Session ───────────────────────────────────────────────────────────────
-  # cage runs exactly one Wayland client fullscreen — perfect for a kiosk.
-  # -s passes through Ctrl+Alt+Backspace so you can escape to TTY if needed.
-  services.greetd = {
+  services.xserver = {
     enable = true;
-    settings.default_session = {
-      command = "${pkgs.cage}/bin/cage -s -- ${launcher}/bin/kiosk-launcher";
-      user    = "media";
+    displayManager = {
+      lightdm.enable = true;
+      autoLogin = { enable = true; user = "media"; };
     };
+    desktopManager.lxqt.enable = true;
   };
-
-  # seatd gives cage unprivileged access to DRM/input without a full login manager.
-  services.seatd.enable = true;
 
   users.users.media = {
     isNormalUser = true;
     description  = "Kiosk media user";
-    extraGroups  = [ "seat" "video" "input" "audio" ];
+    extraGroups  = [ "video" "input" "audio" ];
   };
 
   # ── Audio ─────────────────────────────────────────────────────────────────
-  # PipeWire handles HDMI audio; rtkit gives it real-time scheduling priority.
   security.rtkit.enable = true;
   services.pipewire = {
-    enable     = true;
-    alsa.enable = true;
-    pulse.enable = true;   # jellyfin-media-player and feishin use PulseAudio API
+    enable        = true;
+    alsa.enable   = true;
+    pulse.enable  = true;
   };
 
   # ── Fonts ─────────────────────────────────────────────────────────────────
@@ -95,10 +59,13 @@ in
 
   # ── Packages ──────────────────────────────────────────────────────────────
   environment.systemPackages = with pkgs; [
-    feishin              # Jellyfin/Navidrome music client
-    jellyfin-media-player # mpv-backed Jellyfin client, auto-uses VAAPI
-    freetube             # native YouTube client with built-in ad blocking
-    chromium             # for cinemafred.com kiosk tab
-    iwgtk                # graphical WiFi manager for iwd
+    feishin               # Jellyfin/Navidrome music client
+    jellyfin-media-player # mpv-backed Jellyfin client
+    tsukimi               # Jellyfin client
+    freetube              # YouTube client
+    chromium              # for cinemafred.com
+    iwgtk                 # graphical WiFi manager for iwd
+    onboard               # on-screen keyboard
+    cinemaFredApp
   ];
 }
