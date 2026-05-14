@@ -95,7 +95,7 @@ in
     enable = true;
     displayManager = {
       lightdm.enable = true;
-      defaultSession = "openbox";
+      defaultSession = "none+openbox";
     };
     windowManager.openbox.enable = true;
   };
@@ -107,6 +107,15 @@ in
   # Start pcmanfm-qt in desktop mode (renders wallpaper + ~/Desktop icons).
   environment.etc."xdg/openbox/autostart".text = ''
     pcmanfm-qt --desktop &
+  '';
+
+  # LightDM's autologin falls back to ~/.xsession when no xsessions dir exists.
+  # Write it explicitly so Openbox always starts for the media user.
+  system.activationScripts.mediaXsession = lib.stringAfter [ "users" ] ''
+    install -D -o media -g users -m 755 /dev/stdin /home/media/.xsession <<'EOF'
+    #!/bin/sh
+    exec ${pkgs.openbox}/bin/openbox-session
+    EOF
   '';
 
   # Populate ~/Desktop with app launchers for the media user.
