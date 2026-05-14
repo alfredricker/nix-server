@@ -14,6 +14,23 @@
 #   Store credentials at /run/secrets/cloudflare-tunnel-<hostname>.json (agenix)
 
 let
+  cinemaFredApp = pkgs.symlinkJoin {
+    name  = "cinemafred-launcher";
+    paths = [
+      (pkgs.makeDesktopItem {
+        name        = "cinemafred";
+        desktopName = "CinemaFred";
+        exec        = "${pkgs.chromium}/bin/chromium --app=https://cinemafred.com";
+        icon        = "cinemafred";
+        categories  = [ "AudioVideo" "Video" ];
+      })
+      (pkgs.runCommand "cinemafred-icon" {} ''
+        mkdir -p $out/share/icons/hicolor/scalable/apps
+        cp ${./assets/cinemafred.svg} $out/share/icons/hicolor/scalable/apps/cinemafred.svg
+      '')
+    ];
+  };
+
   # Watches the Nginx access log for HLS playlist requests (.m3u8) and
   # pre-fetches all referenced .ts segments so they're in cache before
   # the player requests them sequentially.
@@ -128,6 +145,33 @@ in
       User       = "nginx";
     };
   };
+
+  # ── Desktop (LXQt kiosk) ─────────────────────────────────────────────────
+  services.xserver = {
+    enable = true;
+    displayManager = {
+      lightdm.enable = true;
+      autoLogin = { enable = true; user = "media"; };
+    };
+    desktopManager.lxqt.enable = true;
+  };
+
+  users.users.media = {
+    isNormalUser = true;
+    extraGroups  = [ "video" "audio" "input" "networkmanager" ];
+  };
+
+  networking.networkmanager.enable = true;
+
+  environment.systemPackages = with pkgs; [
+    tsukimi
+    jellyfin-media-player
+    freetube
+    chromium
+    onboard               # on-screen keyboard
+    networkmanagerapplet  # WiFi tray
+    cinemaFredApp
+  ];
 
   # ── Cloudflare Tunnel (this node as a CDN edge) ───────────────────────────
   services.cloudflared = {
