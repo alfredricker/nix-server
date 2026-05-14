@@ -10,7 +10,7 @@
 #
 # Cloudflare Tunnel bootstrap (per node):
 #   cloudflared tunnel create <hostname>
-#   cloudflared tunnel route dns <hostname> node-<hostname>.rickermedia.com
+#   cloudflared tunnel route dns <hostname> <hostname>.rickermedia.com
 #   Store credentials at /run/secrets/cloudflare-tunnel-<hostname>.json (agenix)
 
 let
@@ -129,13 +129,19 @@ in
     };
   };
 
+  # ── Secrets ───────────────────────────────────────────────────────────────
+  age.secrets."cloudflare-tunnel-${hostname}" = {
+    file = ./secrets/cloudflare-tunnel-${hostname}.age;
+    path = "/run/secrets/cloudflare-tunnel-${hostname}.json";
+  };
+
   # ── Cloudflare Tunnel (this node as a CDN edge) ───────────────────────────
   services.cloudflared = {
     enable = true;
     tunnels."${hostname}" = {
       credentialsFile = "/run/secrets/cloudflare-tunnel-${hostname}.json";
       default         = "http_status:404";
-      ingress."node-${hostname}.rickermedia.com" = "http://127.0.0.1:8080";
+      ingress."${hostname}.rickermedia.com" = "http://127.0.0.1:8080";
     };
   };
 }

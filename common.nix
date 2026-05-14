@@ -29,8 +29,8 @@ let
       COORDS_CACHE="$STATE_DIR/coords.json"
 
       CF_TOKEN=$(cat /run/secrets/cloudflare-kv-token)
-      KV_URL="https://api.cloudflare.com/client/v4/accounts/${clusterConfig.cfAccountId}/storage/kv/namespaces/${clusterConfig.cfKvNamespaceId}/values/node-${hostname}"
-      NODE_URL="https://node-${hostname}.rickermedia.com"
+      KV_URL="https://api.cloudflare.com/client/v4/accounts/${clusterConfig.cfAccountId}/storage/kv/namespaces/${clusterConfig.cfKvNamespaceId}/values/${hostname}"
+      NODE_URL="https://${hostname}.rickermedia.com"
 
       # Get public IPv4 — uses the regular internet path, not Tailscale
       CURRENT_IP=$(curl -sf --max-time 5 https://api4.ipify.org || true)

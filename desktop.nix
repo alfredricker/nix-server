@@ -33,12 +33,10 @@ in
   # ── Session ───────────────────────────────────────────────────────────────
   services.xserver = {
     enable = true;
-    displayManager = {
-      lightdm.enable = true;
-      autoLogin = { enable = true; user = "media"; };
-    };
+    displayManager.lightdm.enable = true;
     desktopManager.lxqt.enable = true;
   };
+  services.displayManager.autoLogin = { enable = true; user = "media"; };
 
   users.users.media = {
     isNormalUser = true;

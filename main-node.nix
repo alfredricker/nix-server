@@ -131,10 +131,10 @@
 
   # ── Cloudflare Tunnels ────────────────────────────────────────────────────
   #
-  # jellyfin.rickermedia.com  → Jellyfin (direct, no CDN routing needed)
-  # node-main.rickermedia.com → Nginx HLS origin (used by the cinemafred.com
-  #                             Cloudflare Worker as the final fallback when
-  #                             no media-node edge is reachable)
+  # jellyfin.rickermedia.com   → Jellyfin (direct, no CDN routing needed)
+  # main-node.rickermedia.com  → Nginx HLS origin (used by the cinemafred.com
+  #                              Cloudflare Worker as the final fallback when
+  #                              no media-node edge is reachable)
   #
   # Provision:
   #   cloudflared tunnel create jellyfin
@@ -142,7 +142,7 @@
   # Store credentials at /run/secrets/cloudflare-tunnel-<name>.json (agenix/sops-nix)
   # Route DNS:
   #   cloudflared tunnel route dns jellyfin         jellyfin.rickermedia.com
-  #   cloudflared tunnel route dns cinemafred-origin node-main.rickermedia.com
+  #   cloudflared tunnel route dns cinemafred-origin main-node.rickermedia.com
   #
   # cinemafred.com itself is handled by a Cloudflare Worker (see worker/).
   services.cloudflared = {
@@ -155,7 +155,7 @@
     tunnels."cinemafred-origin" = {
       credentialsFile = "/run/secrets/cloudflare-tunnel-cinemafred-origin.json";
       default         = "http_status:404";
-      ingress."cinemafred-origin.rickermedia.com" = "http://127.0.0.1:8080";
+      ingress."main-node.rickermedia.com" = "http://127.0.0.1:8080";
     };
   };
 
