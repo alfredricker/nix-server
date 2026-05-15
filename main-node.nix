@@ -140,9 +140,10 @@
       User             = "cinemafred";
       Group            = "cinemafred";
       WorkingDirectory = "/srv/cinemafred";
-      ExecStartPre     = "${pkgs.bash}/bin/bash -c 'echo DATABASE_URL=postgresql://cinemafred:$(cat /run/secrets/postgres-cinemafred-password)@127.0.0.1/cinemafred > /run/cinemafred/env'";
-      EnvironmentFile  = "/run/cinemafred/env";
-      ExecStart        = "${pkgs.nodejs}/bin/node .next/standalone/server.js";
+      ExecStart        = pkgs.writeShellScript "cinemafred-start" ''
+        export DATABASE_URL="postgresql://cinemafred:$(cat /run/secrets/postgres-cinemafred-password)@127.0.0.1/cinemafred"
+        exec ${pkgs.nodejs}/bin/node .next/standalone/server.js
+      '';
       Restart          = "on-failure";
       RestartSec       = "5s";
     };
