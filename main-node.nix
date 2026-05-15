@@ -142,7 +142,7 @@
       WorkingDirectory = "/srv/cinemafred";
       ExecStart        = pkgs.writeShellScript "cinemafred-start" ''
         export DATABASE_URL="postgresql://cinemafred:$(cat /run/secrets/postgres-cinemafred-password)@127.0.0.1/cinemafred"
-        exec ${pkgs.nodejs}/bin/node .next/standalone/server.js
+        exec ${pkgs.nodejs}/bin/node server.js
       '';
       Restart          = "on-failure";
       RestartSec       = "5s";
