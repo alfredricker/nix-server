@@ -133,7 +133,7 @@
     environment = {
       NODE_ENV                    = "production";
       PORT                        = "3000";
-      MEDIA_BASE_URL              = "https://cinemafred-origin.rickermedia.com";
+      MEDIA_BASE_URL              = "https://main-node.rickermedia.com";
       PRISMA_QUERY_ENGINE_LIBRARY = "/srv/cinemafred/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node";
     };
     serviceConfig = {
