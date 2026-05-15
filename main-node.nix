@@ -54,6 +54,8 @@
     file  = ./secrets/postgres-cinemafred-password.age;
     path  = "/run/secrets/postgres-cinemafred-password";
     owner = "postgres";
+    group = "cinemafred";
+    mode  = "0640";
   };
 
   systemd.services.cinemafred-db-password = {
@@ -74,12 +76,14 @@
 
   # ── Local data directories ─────────────────────────────────────────────────
   systemd.tmpfiles.rules = [
-    "d /data                0755 root      root      -"
-    "d /data/music          0770 jellyfin  jellyfin  -"
-    "d /data/movies         0770 jellyfin  jellyfin  -"
-    "d /data/tv             0770 jellyfin  jellyfin  -"
-    "d /data/cinemafred     0755 nginx     nginx     -"
-    "d /var/lib/syncthing   0700 syncthing syncthing -"
+    "d /data                0755 root        root        -"
+    "d /data/music          0770 jellyfin    jellyfin    -"
+    "d /data/movies         0770 jellyfin    jellyfin    -"
+    "d /data/tv             0770 jellyfin    jellyfin    -"
+    "d /data/cinemafred     0755 nginx       nginx       -"
+    "d /var/lib/syncthing   0700 syncthing   syncthing   -"
+    "d /run/cinemafred      0750 cinemafred  cinemafred  -"
+    "d /srv/cinemafred      0750 cinemafred  cinemafred  -"
   ];
 
   # ── Jellyfin ──────────────────────────────────────────────────────────────
@@ -113,6 +117,37 @@
     };
   };
 
+  # ── CinemaFred app ────────────────────────────────────────────────────────
+  users.users.cinemafred = {
+    isSystemUser = true;
+    group        = "cinemafred";
+    home         = "/srv/cinemafred";
+  };
+  users.groups.cinemafred = {};
+
+  systemd.services.cinemafred = {
+    description = "CinemaFred web app";
+    wantedBy    = [ "multi-user.target" ];
+    after       = [ "network.target" "postgresql.service" ];
+    requires    = [ "postgresql.service" ];
+    environment = {
+      NODE_ENV       = "production";
+      PORT           = "3000";
+      MEDIA_BASE_URL = "https://cinemafred-origin.rickermedia.com";
+    };
+    serviceConfig = {
+      Type             = "simple";
+      User             = "cinemafred";
+      Group            = "cinemafred";
+      WorkingDirectory = "/srv/cinemafred";
+      ExecStartPre     = "${pkgs.bash}/bin/bash -c 'echo DATABASE_URL=postgresql://cinemafred:$(cat /run/secrets/postgres-cinemafred-password)@127.0.0.1/cinemafred > /run/cinemafred/env'";
+      EnvironmentFile  = "/run/cinemafred/env";
+      ExecStart        = "${pkgs.nodejs}/bin/node server.js";
+      Restart          = "on-failure";
+      RestartSec       = "5s";
+    };
+  };
+
   # ── Nginx (cinemafred HLS origin) ─────────────────────────────────────────
   #
   # Binds to all interfaces so media-nodes can reach it over Tailscale as a
@@ -127,9 +162,16 @@
       locations."/" = {
         extraConfig = ''
           add_header Cache-Control "public, max-age=3600";
+          add_header Accept-Ranges bytes;
           types {
-            application/vnd.apple.mpegurl m3u8;
-            video/mp2t                     ts;
+            application/vnd.apple.mpegurl  m3u8;
+            video/mp2t                      ts;
+            video/mp4                       mp4;
+            image/jpeg                      jpg jpeg;
+            image/png                       png;
+            image/webp                      webp;
+            text/vtt                        vtt;
+            text/plain                      srt;
           }
         '';
       };
@@ -148,6 +190,10 @@
   age.secrets."cloudflare-kv-token" = {
     file = ./secrets/cloudflare-kv-token.age;
     path = "/run/secrets/cloudflare-kv-token";
+  };
+  age.secrets."cloudflare-tunnel-cinemafred-app" = {
+    file = ./secrets/cloudflare-tunnel-cinemafred-app.age;
+    path = "/run/secrets/cloudflare-tunnel-cinemafred-app.json";
   };
 
   # ── Cloudflare Tunnels ────────────────────────────────────────────────────
@@ -178,12 +224,18 @@
       default         = "http_status:404";
       ingress."main-node.rickermedia.com" = "http://127.0.0.1:8080";
     };
+    tunnels."cinemafred-app" = {
+      credentialsFile = "/run/secrets/cloudflare-tunnel-cinemafred-app.json";
+      default         = "http_status:404";
+      ingress."cinemafred.com" = "http://127.0.0.1:3000";
+    };
   };
 
   # DynamicUser=true (cloudflared module default) prevents LoadCredential from
   # following symlinks, which breaks agenix secrets. Run as root instead.
-  systemd.services."cloudflared-tunnel-jellyfin".serviceConfig.DynamicUser         = lib.mkForce false;
+  systemd.services."cloudflared-tunnel-jellyfin".serviceConfig.DynamicUser          = lib.mkForce false;
   systemd.services."cloudflared-tunnel-cinemafred-origin".serviceConfig.DynamicUser = lib.mkForce false;
+  systemd.services."cloudflared-tunnel-cinemafred-app".serviceConfig.DynamicUser    = lib.mkForce false;
 
   # ── Packages ──────────────────────────────────────────────────────────────
   environment.systemPackages = with pkgs; [ git ];
