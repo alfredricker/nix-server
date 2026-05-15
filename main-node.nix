@@ -8,7 +8,28 @@
   fileSystems."/data" = {
     device  = "/dev/disk/by-id/ata-WDC_WD140EDGZ-11CMYA0_T1G4XKUN-part1";
     fsType  = "ext4";
-    options = [ "defaults" "nofail" ];
+    options = [ "defaults" "nofail" "noatime" ];
+  };
+
+  # Increase readahead for the 14TB WD spinning drive from the default 128 KB
+  # to 2 MB — improves sequential streaming throughput for Jellyfin and HLS.
+  services.udev.extraRules = ''
+    ACTION=="add|change", SUBSYSTEM=="block", KERNEL=="sd[a-z]", \
+    ENV{ID_SERIAL}=="WDC_WD140EDGZ-11CMYA0_T1G4XKUN", \
+    ATTR{queue/read_ahead_kb}="2048"
+  '';
+
+  # Prevent the WD drive from spinning down — the default APM setting causes
+  # ~17s stall on first access after idle, which breaks Jellyfin and HLS reads.
+  systemd.services.wd-drive-no-spindown = {
+    description = "Disable spindown on /data WD drive";
+    wantedBy    = [ "multi-user.target" ];
+    after       = [ "local-fs.target" ];
+    serviceConfig = {
+      Type            = "oneshot";
+      RemainAfterExit = true;
+      ExecStart       = "${pkgs.hdparm}/bin/hdparm -B 255 -S 0 /dev/disk/by-id/ata-WDC_WD140EDGZ-11CMYA0_T1G4XKUN";
+    };
   };
   # ── PostgreSQL ────────────────────────────────────────────────────────────
   services.postgresql = {
