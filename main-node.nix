@@ -142,7 +142,7 @@
       WorkingDirectory = "/srv/cinemafred";
       ExecStartPre     = "${pkgs.bash}/bin/bash -c 'echo DATABASE_URL=postgresql://cinemafred:$(cat /run/secrets/postgres-cinemafred-password)@127.0.0.1/cinemafred > /run/cinemafred/env'";
       EnvironmentFile  = "/run/cinemafred/env";
-      ExecStart        = "${pkgs.nodejs}/bin/node server.js";
+      ExecStart        = "${pkgs.nodejs}/bin/node .next/standalone/server.js";
       Restart          = "on-failure";
       RestartSec       = "5s";
     };
