@@ -131,9 +131,10 @@
     after       = [ "network.target" "postgresql.service" ];
     requires    = [ "postgresql.service" ];
     environment = {
-      NODE_ENV       = "production";
-      PORT           = "3000";
-      MEDIA_BASE_URL = "https://cinemafred-origin.rickermedia.com";
+      NODE_ENV                    = "production";
+      PORT                        = "3000";
+      MEDIA_BASE_URL              = "https://cinemafred-origin.rickermedia.com";
+      PRISMA_QUERY_ENGINE_LIBRARY = "/srv/cinemafred/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node";
     };
     serviceConfig = {
       Type             = "simple";
@@ -142,6 +143,7 @@
       WorkingDirectory = "/srv/cinemafred";
       ExecStart        = pkgs.writeShellScript "cinemafred-start" ''
         export DATABASE_URL="postgresql://cinemafred:$(cat /run/secrets/postgres-cinemafred-password)@127.0.0.1/cinemafred"
+        export LD_LIBRARY_PATH="${pkgs.openssl.out}/lib"
         exec ${pkgs.nodejs}/bin/node server.js
       '';
       Restart          = "on-failure";
@@ -228,7 +230,8 @@
     tunnels."cinemafred-app" = {
       credentialsFile = "/run/secrets/cloudflare-tunnel-cinemafred-app.json";
       default         = "http_status:404";
-      ingress."cinemafred.com" = "http://127.0.0.1:3000";
+      ingress."cinemafred.com"     = "http://127.0.0.1:3000";
+      ingress."www.cinemafred.com" = "http://127.0.0.1:3000";
     };
   };
 
