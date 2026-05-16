@@ -166,6 +166,13 @@
         extraConfig = ''
           add_header Cache-Control "public, max-age=3600";
           add_header Accept-Ranges bytes;
+          add_header Access-Control-Allow-Origin "https://cinemafred.com";
+          add_header Access-Control-Allow-Methods "GET, HEAD, OPTIONS";
+          add_header Access-Control-Allow-Headers "Range";
+          add_header Access-Control-Expose-Headers "Content-Range, Content-Length, Accept-Ranges";
+          if ($request_method = OPTIONS) {
+            return 204;
+          }
           types {
             application/vnd.apple.mpegurl  m3u8;
             video/mp2t                      ts;

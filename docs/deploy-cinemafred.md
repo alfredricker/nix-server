@@ -45,22 +45,15 @@ DATABASE_URL="postgresql://cinemafred:$DB_PASS@127.0.0.1/cinemafred" \
 
 ### Deploying the app
 
-Run from the cinemafred repo (`../cinemafred/`). The repo has a `shell.nix` that
-sets the Prisma engine paths required on NixOS — enter it first:
+Run from the cinemafred repo (`../cinemafred/`):
 
 ```bash
-nix-shell   # sets PRISMA_QUERY_ENGINE_LIBRARY and PRISMA_SCHEMA_ENGINE_PATH
-npm run build
-
-rsync -av .next/standalone/ root@main-node:/srv/cinemafred/
-rsync -av .next/static/     root@main-node:/srv/cinemafred/.next/static/
-rsync -av public/           root@main-node:/srv/cinemafred/public/
-
-ssh fred@main-node sudo systemctl restart cinemafred
+./scripts/deploy.sh
 ```
 
-The standalone build bundles its own `node_modules` — no `npm install` needed on
-the server.
+This cleans `.next`, builds inside `nix-shell` (for correct Prisma engine paths),
+rsyncs to main-node, and restarts the service. The standalone build bundles its
+own `node_modules` — no `npm install` needed on the server.
 
 Check it started cleanly:
 
