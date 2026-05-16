@@ -57,7 +57,6 @@ let
         def __init__(self):
             super().__init__()
             self.set_decorated(False)
-            self.connect("key-press-event", self.on_key)
             self.connect("delete-event", Gtk.main_quit)
             self.fullscreen()
 
@@ -101,6 +100,12 @@ let
             # and restores the launcher from any state.
             _signal.signal(_signal.SIGUSR1,
                            lambda *_: GLib.idle_add(self._home_pressed))
+
+            # Capture phase intercepts keys before any child widget sees them,
+            # fixing Down/Enter being swallowed by GTK's focus traversal.
+            key_ctrl = Gtk.EventControllerKey.new(self)
+            key_ctrl.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+            key_ctrl.connect("key-pressed", self._on_key)
 
             icon_theme = Gtk.IconTheme.get_default()
             icon_theme.append_search_path("/run/current-system/sw/share/icons")
@@ -156,6 +161,17 @@ let
             self.add(grid)
             self._set_focus(0)
             self.show_all()
+            self._hide_cursor()
+
+        def _hide_cursor(self):
+            gdk_win = self.get_window()
+            if gdk_win:
+                gdk_win.set_cursor(
+                    Gdk.Cursor.new_for_display(
+                        Gdk.Display.get_default(),
+                        Gdk.CursorType.BLANK_CURSOR,
+                    )
+                )
 
         def _set_focus(self, idx):
             for i, (card, _) in enumerate(self.cards):
@@ -166,21 +182,20 @@ let
                     ctx.remove_class("focused")
             self.focus_idx = idx
 
-        def on_key(self, _widget, event):
-            k = event.keyval
+        def _on_key(self, _ctrl, keyval, _keycode, _state):
             i = self.focus_idx
             n = len(self.cards)
-            if k == Gdk.KEY_Right:
+            if keyval == Gdk.KEY_Right:
                 self._set_focus((i + 1) % n)
-            elif k == Gdk.KEY_Left:
+            elif keyval == Gdk.KEY_Left:
                 self._set_focus((i - 1) % n)
-            elif k == Gdk.KEY_Down:
+            elif keyval == Gdk.KEY_Down:
                 if i + COLS < n:
                     self._set_focus(i + COLS)
-            elif k == Gdk.KEY_Up:
+            elif keyval == Gdk.KEY_Up:
                 if i - COLS >= 0:
                     self._set_focus(i - COLS)
-            elif k in (Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_space):
+            elif keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_space):
                 self._launch(i)
             return True
 
@@ -213,6 +228,7 @@ let
             self.show_all()
             self.present()
             self.fullscreen()
+            self._hide_cursor()
             return False
 
     Launcher()
@@ -360,6 +376,7 @@ in
     install -D -o media -g users -m 644 /dev/stdin \
         /home/media/.config/openbox/autostart <<EOF
     ${pkgs.xorg.xsetroot}/bin/xsetroot -solid black
+    ${pkgs.unclutter-xfixes}/bin/unclutter --timeout 1 --jitter 0 --ignore-scrolling &
     ${tvLauncher}/bin/tv-launcher &
     EOF
   '';
@@ -393,6 +410,7 @@ in
     xterm                 # terminal (Ctrl+Alt+T)
     playerctl             # MPRIS play/pause for all media apps
     wireplumber           # wpctl for volume control
+    unclutter-xfixes      # hide cursor after 1s idle, show on mouse movement
 cinemaFredApp         # installs the cinemafred icon into hicolor
     tvLauncher
   ];
