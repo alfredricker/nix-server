@@ -80,7 +80,7 @@
     "d /data/music          0770 jellyfin    jellyfin    -"
     "d /data/movies         0770 jellyfin    jellyfin    -"
     "d /data/tv             0770 jellyfin    jellyfin    -"
-    "d /data/cinemafred     0755 nginx       nginx       -"
+    "d /data/cinemafred     0775 nginx       nginx       -"
     "d /var/lib/syncthing   0700 syncthing   syncthing   -"
     "d /run/cinemafred      0750 cinemafred  cinemafred  -"
     "d /srv/cinemafred      0750 cinemafred  cinemafred  -"
@@ -95,7 +95,7 @@
     openFirewall = true;
   };
   users.users.jellyfin.extraGroups = [ "render" "video" ];
-  users.users.fred.extraGroups     = [ "wheel" "jellyfin" ];
+  users.users.fred.extraGroups     = [ "wheel" "jellyfin" "nginx" ];
 
   # ── Syncthing (send-only origin for media-nodes) ──────────────────────────
   #

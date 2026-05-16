@@ -44,12 +44,14 @@ let
       ("Feishin",    "feishin",               ["feishin"]),
       ("CinemaFred", "cinemafred",            [
         "chromium", "--app=https://cinemafred.com",
+        "--enable-blink-features=SpatialNavigationEnabled",
         "--disable-infobars", "--noerrdialogs",
         "--disable-session-crashed-bubble", "--no-first-run",
       ]),
       ("Tsukimi",    "tsukimi",               ["tsukimi"]),
       ("YouTube",    "youtube",               [
         "brave", "--app=https://www.youtube.com/tv",
+        "--user-agent=Mozilla/5.0 (SMART-TV; Linux; Tizen 5.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/2.1 TV Safari/537.36",
         "--disable-infobars", "--noerrdialogs",
         "--disable-session-crashed-bubble", "--no-first-run",
       ]),
@@ -707,7 +709,9 @@ in
     ${pkgs.xorg.xsetroot}/bin/xsetroot -solid black
     ${pkgs.unclutter-xfixes}/bin/unclutter --timeout 1 --jitter 0 --ignore-scrolling &
     ${pkgs.glib}/bin/gsettings set org.onboard layout 'Compact'
-    ${pkgs.glib}/bin/gsettings set org.onboard.window docking-enabled true
+    ${pkgs.glib}/bin/gsettings set org.onboard start-minimized true
+    ${pkgs.glib}/bin/gsettings set org.onboard.window docking-enabled false
+    ${pkgs.glib}/bin/gsettings set org.onboard.window force-to-top true
     ${pkgs.glib}/bin/gsettings set org.onboard.auto-show enabled true
     ${pkgs.onboard}/bin/onboard &
     ${tvLauncher}/bin/tv-launcher &
