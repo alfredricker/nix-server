@@ -190,13 +190,19 @@ let
     Gtk.main()
   '';
 
-  tvLauncher = pkgs.writeShellScriptBin "tv-launcher" ''
-    export GI_TYPELIB_PATH="${lib.makeSearchPath "lib/girepository-1.0" (with pkgs; [
-      glib gdk-pixbuf pango atk gtk3
-    ])}"
-    export XDG_DATA_DIRS="''${XDG_DATA_DIRS:+$XDG_DATA_DIRS:}/run/current-system/sw/share"
-    exec ${pythonEnv}/bin/python3 ${launcherPy}
-  '';
+  # wrapGAppsHook traverses buildInputs at build time and sets GI_TYPELIB_PATH,
+  # GSETTINGS_SCHEMA_DIR, XDG_DATA_DIRS, etc. — no manual typelib paths needed.
+  tvLauncher = pkgs.stdenv.mkDerivation {
+    name = "tv-launcher";
+    dontUnpack = true;
+    nativeBuildInputs = [ pkgs.wrapGAppsHook3 pkgs.gobject-introspection ];
+    buildInputs = with pkgs; [ gtk3 glib gdk-pixbuf pango atk xorg.libX11 ];
+    installPhase = ''
+      install -Dm755 ${pkgs.writeShellScript "tv-launcher-unwrapped" ''
+        exec ${pythonEnv}/bin/python3 ${launcherPy} "$@"
+      ''} $out/bin/tv-launcher
+    '';
+  };
 
   openboxRc = pkgs.writeText "openbox-rc.xml" ''
     <?xml version="1.0" encoding="UTF-8"?>
@@ -278,17 +284,19 @@ in
   # System-wide Openbox config: keyboard shortcuts, single desktop, no margins.
   environment.etc."xdg/openbox/rc.xml".source = openboxRc;
 
-  environment.etc."xdg/openbox/autostart".text = ''
-    xsetroot -solid black
-    tv-launcher &
-  '';
-
-  # LightDM's autologin falls back to ~/.xsession when no xsessions dir exists.
-  # Write it explicitly so Openbox always starts for the media user.
+  # openbox-session checks ~/.config/openbox/autostart regardless of
+  # XDG_CONFIG_DIRS, so write it here with absolute store paths to avoid
+  # PATH or XDG environment ambiguity.
   system.activationScripts.mediaXsession = lib.stringAfter [ "users" ] ''
     install -D -o media -g users -m 755 /dev/stdin /home/media/.xsession <<'EOF'
     #!/bin/sh
     exec ${pkgs.openbox}/bin/openbox-session
+    EOF
+
+    install -D -o media -g users -m 644 /dev/stdin \
+        /home/media/.config/openbox/autostart <<EOF
+    ${pkgs.xorg.xsetroot}/bin/xsetroot -solid black
+    ${tvLauncher}/bin/tv-launcher &
     EOF
   '';
 
