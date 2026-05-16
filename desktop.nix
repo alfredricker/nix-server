@@ -34,7 +34,7 @@ let
   pythonEnv = pkgs.python3.withPackages (ps: [ ps.pygobject3 ]);
 
   launcherPy = pkgs.writeText "tv-launcher.py" ''
-    import gi, subprocess, threading
+    import gi, os, signal as _signal, subprocess, threading
     gi.require_version('Gtk', '3.0')
     from gi.repository import Gtk, Gdk, GLib
 
@@ -50,51 +50,57 @@ let
       ("FreeTube",   "freetube",              ["freetube"]),
     ]
 
-    COLS    = 3
-    ICON_PX = 128
-
-    CSS = b"""
-    window {
-      background-color: #0d0d0d;
-    }
-    .card {
-      border-radius: 16px;
-      background-color: #1c1c1c;
-      padding: 40px 32px 28px 32px;
-      margin: 8px;
-      min-width: 240px;
-    }
-    .card.focused {
-      background-color: #1a3461;
-      border: 3px solid #5599ff;
-    }
-    .card-name {
-      color: #cccccc;
-      font-size: 22px;
-      font-weight: bold;
-      margin-top: 16px;
-    }
-    .card.focused .card-name {
-      color: #ffffff;
-    }
-    """
+    COLS = 3
+    ROWS = 2
 
     class Launcher(Gtk.Window):
         def __init__(self):
             super().__init__()
-            provider = Gtk.CssProvider()
-            provider.load_from_data(CSS)
-            Gtk.StyleContext.add_provider_for_screen(
-                Gdk.Screen.get_default(), provider,
-                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
-            )
-            self.fullscreen()
             self.set_decorated(False)
             self.connect("key-press-event", self.on_key)
             self.connect("delete-event", Gtk.main_quit)
+            self.fullscreen()
+
+            screen       = Gdk.Screen.get_default()
+            sw, sh       = screen.get_width(), screen.get_height()
+            gap          = sh // 54         # ~20px on 1080p
+            margin_h     = sw // 20         # ~96px on 1920
+            margin_v     = sh // 20         # ~54px on 1080p
+            icon_px      = sh // 9          # ~120px on 1080p
+            font_sz      = max(16, sh // 50)
+
+            provider = Gtk.CssProvider()
+            provider.load_from_data(f"""
+                window {{ background-color: #0d0d0d; }}
+                .card {{
+                    border-radius: 12px;
+                    background-color: #1c1c1c;
+                    padding: {gap * 2}px {gap}px;
+                }}
+                .card.focused {{
+                    background-color: #1a3461;
+                    border: 3px solid #5599ff;
+                }}
+                .card-name {{
+                    color: #cccccc;
+                    font-size: {font_sz}px;
+                    font-weight: bold;
+                    margin-top: {gap}px;
+                }}
+                .card.focused .card-name {{ color: #ffffff; }}
+            """.encode())
+            Gtk.StyleContext.add_provider_for_screen(
+                screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+            )
 
             self.focus_idx = 0
             self.cards = []
+            self.current_proc = None
+
+            # Home key (via Openbox keybind → SIGUSR1) kills the running app
+            # and restores the launcher from any state.
+            _signal.signal(_signal.SIGUSR1,
+                           lambda *_: GLib.idle_add(self._home_pressed))
 
             icon_theme = Gtk.IconTheme.get_default()
             icon_theme.append_search_path("/run/current-system/sw/share/icons")
@@ -102,42 +108,52 @@ let
             grid = Gtk.Grid()
             grid.set_column_homogeneous(True)
             grid.set_row_homogeneous(True)
-            grid.set_column_spacing(32)
-            grid.set_row_spacing(32)
-            grid.set_halign(Gtk.Align.CENTER)
-            grid.set_valign(Gtk.Align.CENTER)
+            grid.set_column_spacing(gap)
+            grid.set_row_spacing(gap)
+            grid.set_halign(Gtk.Align.FILL)
+            grid.set_valign(Gtk.Align.FILL)
+            grid.set_hexpand(True)
+            grid.set_vexpand(True)
+            grid.set_margin_start(margin_h)
+            grid.set_margin_end(margin_h)
+            grid.set_margin_top(margin_v)
+            grid.set_margin_bottom(margin_v)
 
             for idx, (name, icon_name, cmd) in enumerate(APPS):
                 r, c = divmod(idx, COLS)
-                box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-                box.get_style_context().add_class("card")
-                box.set_halign(Gtk.Align.CENTER)
-                box.set_valign(Gtk.Align.CENTER)
+
+                card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+                card.get_style_context().add_class("card")
+                card.set_halign(Gtk.Align.FILL)
+                card.set_valign(Gtk.Align.FILL)
+                card.set_hexpand(True)
+                card.set_vexpand(True)
+
+                inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+                inner.set_halign(Gtk.Align.CENTER)
+                inner.set_valign(Gtk.Align.CENTER)
+                card.pack_start(inner, True, True, 0)
 
                 try:
-                    pb  = icon_theme.load_icon(icon_name, ICON_PX,
+                    pb  = icon_theme.load_icon(icon_name, icon_px,
                                                Gtk.IconLookupFlags.FORCE_SIZE)
                     img = Gtk.Image.new_from_pixbuf(pb)
                 except Exception:
                     img = Gtk.Image.new_from_icon_name(
                         "application-x-executable", Gtk.IconSize.DIALOG)
-                    img.set_pixel_size(ICON_PX)
+                    img.set_pixel_size(icon_px)
                 img.set_halign(Gtk.Align.CENTER)
-                box.pack_start(img, False, False, 0)
+                inner.pack_start(img, False, False, 0)
 
                 lbl = Gtk.Label(label=name)
                 lbl.get_style_context().add_class("card-name")
                 lbl.set_halign(Gtk.Align.CENTER)
-                box.pack_start(lbl, False, False, 0)
+                inner.pack_start(lbl, False, False, 0)
 
-                grid.attach(box, c, r, 1, 1)
-                self.cards.append((box, cmd))
+                grid.attach(card, c, r, 1, 1)
+                self.cards.append((card, cmd))
 
-            outer = Gtk.Box()
-            outer.set_halign(Gtk.Align.FILL)
-            outer.set_valign(Gtk.Align.FILL)
-            outer.pack_start(grid, True, True, 0)
-            self.add(outer)
+            self.add(grid)
             self._set_focus(0)
             self.show_all()
 
@@ -168,6 +184,16 @@ let
                 self._launch(i)
             return True
 
+        def _home_pressed(self):
+            if self.current_proc and self.current_proc.poll() is None:
+                try:
+                    os.killpg(os.getpgid(self.current_proc.pid), _signal.SIGTERM)
+                except Exception:
+                    self.current_proc.kill()
+                self.current_proc = None
+            self._restore()
+            return False
+
         def _launch(self, idx):
             _, cmd = self.cards[idx]
             self.hide()
@@ -175,9 +201,12 @@ let
 
         def _run(self, cmd):
             try:
-                subprocess.run(cmd)
+                self.current_proc = subprocess.Popen(cmd, start_new_session=True)
+                self.current_proc.wait()
             except Exception:
                 pass
+            finally:
+                self.current_proc = None
             GLib.idle_add(self._restore)
 
         def _restore(self):
@@ -222,6 +251,41 @@ let
         <chainQuitKey>C-g</chainQuitKey>
         <keybind key="C-A-t">
           <action name="Execute"><command>xterm</command></action>
+        </keybind>
+        <keybind key="Home">
+          <action name="Execute">
+            <command>pkill -USR1 -f tv-launcher.py</command>
+          </action>
+        </keybind>
+        <keybind key="XF86AudioRaiseVolume">
+          <action name="Execute">
+            <command>wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+</command>
+          </action>
+        </keybind>
+        <keybind key="XF86AudioLowerVolume">
+          <action name="Execute">
+            <command>wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-</command>
+          </action>
+        </keybind>
+        <keybind key="XF86AudioMute">
+          <action name="Execute">
+            <command>wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle</command>
+          </action>
+        </keybind>
+        <keybind key="XF86AudioPlay">
+          <action name="Execute">
+            <command>playerctl play-pause</command>
+          </action>
+        </keybind>
+        <keybind key="XF86AudioPlayPause">
+          <action name="Execute">
+            <command>playerctl play-pause</command>
+          </action>
+        </keybind>
+        <keybind key="XF86WakeUp">
+          <action name="Execute">
+            <command>xset dpms force on</command>
+          </action>
         </keybind>
       </keyboard>
       <mouse>
@@ -327,7 +391,9 @@ in
     iwgtk                 # graphical WiFi manager for iwd
     onboard               # on-screen keyboard
     xterm                 # terminal (Ctrl+Alt+T)
-    cinemaFredApp         # installs the cinemafred icon into hicolor
+    playerctl             # MPRIS play/pause for all media apps
+    wireplumber           # wpctl for volume control
+cinemaFredApp         # installs the cinemafred icon into hicolor
     tvLauncher
   ];
 }
