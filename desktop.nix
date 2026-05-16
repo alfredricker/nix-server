@@ -7,6 +7,7 @@
 # Ctrl+Alt+T opens xterm.
 #
 # FLIRC remote: program arrow keys (navigate) + Enter (select).
+# YouTube TV via Brave (built-in ad blocking, no extension setup needed).
 
 let
   cinemaFredApp = pkgs.symlinkJoin {
@@ -47,7 +48,11 @@ let
         "--disable-session-crashed-bubble", "--no-first-run",
       ]),
       ("Tsukimi",    "tsukimi",               ["tsukimi"]),
-      ("FreeTube",   "freetube",              ["freetube"]),
+      ("YouTube",    "youtube",               [
+        "brave", "--app=https://www.youtube.com/tv",
+        "--disable-infobars", "--noerrdialogs",
+        "--disable-session-crashed-bubble", "--no-first-run",
+      ]),
       ("Settings",   "preferences-system",    ["tv-settings"]),
     ]
 
@@ -104,10 +109,6 @@ let
 
             # Capture phase intercepts keys before any child widget sees them,
             # fixing Down/Enter being swallowed by GTK's focus traversal.
-            key_ctrl = Gtk.EventControllerKey.new(self)
-            key_ctrl.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-            key_ctrl.connect("key-pressed", self._on_key)
-
             icon_theme = Gtk.IconTheme.get_default()
             icon_theme.append_search_path("/run/current-system/sw/share/icons")
 
@@ -183,7 +184,8 @@ let
                     ctx.remove_class("focused")
             self.focus_idx = idx
 
-        def _on_key(self, _ctrl, keyval, _keycode, _state):
+        def do_key_press_event(self, event):
+            keyval = event.keyval
             i = self.focus_idx
             n = len(self.cards)
             if keyval == Gdk.KEY_Right:
@@ -319,10 +321,6 @@ let
             self.tab_idx   = 0
             self.focus_idx = 0
             self.disp_rows = []
-
-            key_ctrl = Gtk.EventControllerKey.new(self)
-            key_ctrl.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-            key_ctrl.connect("key-pressed", self._on_key)
 
             outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
 
@@ -516,7 +514,8 @@ let
             GLib.idle_add(refresh[self.tab_idx])
 
         # ── Keys ───────────────────────────────────────────────────────────
-        def _on_key(self, _ctrl, keyval, _keycode, _state):
+        def do_key_press_event(self, event):
+            keyval = event.keyval
             if self.in_tabs:
                 if keyval == Gdk.KEY_Left:
                     self.tab_idx   = (self.tab_idx - 1) % len(TABS)
@@ -707,6 +706,10 @@ in
         /home/media/.config/openbox/autostart <<EOF
     ${pkgs.xorg.xsetroot}/bin/xsetroot -solid black
     ${pkgs.unclutter-xfixes}/bin/unclutter --timeout 1 --jitter 0 --ignore-scrolling &
+    ${pkgs.glib}/bin/gsettings set org.onboard layout 'Compact'
+    ${pkgs.glib}/bin/gsettings set org.onboard.window docking-enabled true
+    ${pkgs.glib}/bin/gsettings set org.onboard.auto-show enabled true
+    ${pkgs.onboard}/bin/onboard &
     ${tvLauncher}/bin/tv-launcher &
     EOF
   '';
@@ -716,6 +719,10 @@ in
     description  = "Kiosk media user";
     extraGroups  = [ "video" "input" "audio" ];
   };
+
+  # ── Accessibility ─────────────────────────────────────────────────────────
+  # AT-SPI bus lets onboard detect text field focus for auto-show.
+  services.gnome.at-spi2-core.enable = true;
 
   # ── Audio ─────────────────────────────────────────────────────────────────
   security.rtkit.enable = true;
@@ -733,7 +740,7 @@ in
     feishin               # Jellyfin/Navidrome music client
     jellyfin-media-player # mpv-backed Jellyfin client
     tsukimi               # Jellyfin client
-    freetube              # YouTube client
+    brave                 # YouTube TV (built-in ad blocking)
     chromium              # for cinemafred.com
     iwgtk                 # graphical WiFi manager for iwd
     onboard               # on-screen keyboard
