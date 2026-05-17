@@ -37,6 +37,13 @@ in
   services.displayManager.sddm = {
     enable = true;
     wayland.enable = true;
+    # Explicit autologin block — don't rely on NixOS deriving Session from
+    # defaultSession, which can silently produce an empty or wrong value.
+    settings.Autologin = {
+      User    = "media";
+      Session = "plasma-bigscreen-wayland";
+      Relogin = true;
+    };
   };
   services.displayManager = {
     defaultSession = "plasma-bigscreen-wayland";
@@ -49,7 +56,7 @@ in
   users.users.media = {
     isNormalUser = true;
     description  = "Kiosk media user";
-    extraGroups  = [ "video" "input" "audio" ];
+    extraGroups  = [ "video" "input" "audio" "netdev" ];
   };
 
   # ── Font scaling ──────────────────────────────────────────────────────────
@@ -57,6 +64,12 @@ in
   environment.etc."xdg/kcmfonts".text = ''
     [General]
     forceFontDPI=144
+  '';
+
+  environment.etc."xdg/kscreenlockerrc".text = ''
+    [Daemon]
+    Autolock=false
+    LockOnResume=false
   '';
 
   # ── Audio ─────────────────────────────────────────────────────────────────
@@ -79,6 +92,9 @@ in
     kdePackages.plasmatube         # YouTube via Invidious (no ads, no UA spoofing)
     kdePackages.plasma-settings    # settings app designed for bigscreen
     chromium                       # CinemaFred /tv endpoint
+    kdePackages.plasma-nm           # provides org.kde.plasma.networkmanagement QML module
+    kdePackages.kdeconnect-kde      # provides org.kde.kdeconnect QML module (HomeHeader indicator)
+    pipewire                        # libpipewire-0.3.so for plasmashell audio widget dlopen
     iwgtk                          # graphical WiFi manager for iwd
     xterm                          # terminal
     playerctl                      # MPRIS play/pause

@@ -7,12 +7,16 @@
 # Uses stdenv.mkDerivation instead of mkKdeDerivation because mkKdeDerivation
 # requires the package to be in nixpkgs's KDE project info database.
 #
-# Two patches are applied at build time:
+# Three patches applied:
 #   1. Version floor: nixpkgs has plasma-workspace 6.6.4; the source requires
 #      6.6.90 (a release-script bump, not a real API requirement). Lowered to
 #      6.6.0 to satisfy find_package without patching actual build logic.
-#   2. inputhandler removed: needs SDL3 (not in nixpkgs) for gamepad/CEC input.
-#      The Flirc remote sends keyboard events; no SDL needed.
+#   2. SDL3 made optional: find_package(SDL3 REQUIRED) → optional, and
+#      set_package_properties TYPE REQUIRED → OPTIONAL, then inputhandler
+#      subdir removed. SDL3 not in nixpkgs; Flirc remote sends keyboard events.
+#   3. Session file fix (postInstall): the installed .desktop hardcodes
+#      plasma-dbus-run-session-if-needed under $out/libexec, but that binary
+#      lives in plasma-workspace. Rewritten to the correct store path.
 
 { pkgs, lib ? pkgs.lib }:
 
@@ -31,7 +35,7 @@ pkgs.kdePackages.callPackage ({
   plasma-workspace, plasma-activities, plasma-activities-stats,
   plasma-nano, plasma-wayland-protocols,
   # Qt
-  qtbase, qtmultimedia, qtwebengine, qtwayland,
+  qtbase, qtdeclarative, qtmultimedia, qtwebengine, qtwayland,
   # Other
   qcoro, wayland,
 }:
@@ -51,7 +55,7 @@ stdenv.mkDerivation {
   nativeBuildInputs = [ cmake ninja pkg-config extra-cmake-modules wrapQtAppsHook ];
 
   buildInputs = [
-    qtbase
+    qtbase qtdeclarative
     bluez-qt ki18n kirigami kcmutils kglobalaccel knotifications kio
     kwindowsystem ksvg kdbusaddons kiconthemes
     libkscreen
@@ -65,7 +69,20 @@ stdenv.mkDerivation {
     substituteInPlace CMakeLists.txt \
       --replace-fail 'set(PROJECT_DEP_VERSION "6.6.90")' 'set(PROJECT_DEP_VERSION "6.6.0")' \
       --replace-fail "find_package(SDL3 REQUIRED)"        "find_package(SDL3)" \
+      --replace-fail "TYPE REQUIRED"                      "TYPE OPTIONAL" \
       --replace-fail "add_subdirectory(inputhandler)"     ""
+    # QCoro6::Qml links Qt6::QmlPrivate; make it findable by adding the
+    # private component to the existing Qt6 find_package block.
+    sed -i '/WaylandClient$/a\    QmlPrivate' CMakeLists.txt
+  '';
+
+  # The installed session .desktop has plasma-dbus-run-session-if-needed
+  # hardcoded under $out/libexec, but that binary lives in plasma-workspace.
+  # Rewrite it to the correct store path after install.
+  postInstall = ''
+    substituteInPlace $out/share/wayland-sessions/plasma-bigscreen-wayland.desktop \
+      --replace-fail "$out/libexec/plasma-dbus-run-session-if-needed" \
+                     "${plasma-workspace}/libexec/plasma-dbus-run-session-if-needed"
   '';
 
   passthru.providedSessions = [ "plasma-bigscreen-wayland" ];
