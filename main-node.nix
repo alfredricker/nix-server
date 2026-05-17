@@ -35,7 +35,7 @@
   services.postgresql = {
     enable  = true;
     package = pkgs.postgresql_16;
-    settings.listen_addresses = "*";
+    settings.listen_addresses = lib.mkForce "*";
     ensureDatabases = [ "cinemafred" ];
     ensureUsers = [{
       name             = "cinemafred";
