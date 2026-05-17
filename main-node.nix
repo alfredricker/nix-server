@@ -35,16 +35,18 @@
   services.postgresql = {
     enable  = true;
     package = pkgs.postgresql_16;
+    settings.listen_addresses = "*";
     ensureDatabases = [ "cinemafred" ];
     ensureUsers = [{
       name             = "cinemafred";
       ensureDBOwnership = true;
     }];
     authentication = pkgs.lib.mkOverride 10 ''
-    # TYPE  DATABASE    USER        ADDRESS      METHOD
-    local   all         postgres                 peer
-    local   cinemafred  cinemafred               peer
-    host    cinemafred  cinemafred  127.0.0.1/32 scram-sha-256
+    # TYPE  DATABASE    USER        ADDRESS           METHOD
+    local   all         postgres                      peer
+    local   cinemafred  cinemafred                    peer
+    host    cinemafred  cinemafred  127.0.0.1/32      scram-sha-256
+    host    cinemafred  cinemafred  100.64.0.0/10     scram-sha-256
     '';
   };
 
