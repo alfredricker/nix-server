@@ -18,7 +18,7 @@ Replace the current Openbox + custom Python GTK launcher (`desktop.nix`) with KD
 | CinemaFred | Chromium → `cinemafred.com/tv` endpoint | fred is building the /tv endpoint |
 | Music | Feishin | keep as-is |
 
-**Status:** Openbox migration complete. `desktop.nix` now uses KDE Plasma 6 + SDDM (X11 mode). Waiting for `plasma-bigscreen` to land in nixpkgs (~next month per KDE website) before switching to the Bigscreen session.
+**Status:** Building plasma-bigscreen from source (Plasma/6.7 branch, rev f54b0b4d). See `pkgs/plasma-bigscreen.nix`. Session is `plasma-bigscreen-wayland` via SDDM Wayland mode.
 
 **What's done:**
 - `desktop.nix` fully rewritten: LightDM + Openbox + Python GTK launcher + tvSettings removed
@@ -32,9 +32,8 @@ Replace the current Openbox + custom Python GTK launcher (`desktop.nix`) with KD
 - Tailscale subnet (`100.64.0.0/10`) added to pg_hba.conf
 
 **Next steps:**
-1. Deploy and test on freds-node
-2. Verify Intel GPU driver is Wayland-safe (`hardware.intelgpu.computeRuntime = "legacy"` is already set) — then flip `sddm.wayland.enable = true`
-3. When `plasma-bigscreen` lands in nixpkgs: add it to packages, change `defaultSession = "plasma-bigscreen"`
-4. Configure Home key (Flirc remote) to open KDE app launcher via `kglobalshortcutsrc`
+1. Deploy: `sudo nixos-rebuild switch --flake .#freds-node` (or `--target-host` to build remotely)
+2. Verify apps appear in Bigscreen grid after first login (reboot if not)
+3. When `plasma-bigscreen` lands in nixpkgs: delete `pkgs/plasma-bigscreen.nix`, use `kdePackages.plasma-bigscreen` directly in `desktop.nix`
 
 **Flirc remote** is programmed with: up, down, left, right, return, vol_down, vol_up, home, mute, pause, play/pause, wake. `return` = OK button.

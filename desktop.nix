@@ -1,10 +1,12 @@
 { config, pkgs, lib, ... }:
 
-# KDE Plasma 6 desktop for TV-attached nodes (X11 via SDDM).
-# Switch services.displayManager.sddm.wayland.enable to true once GPU/driver verified.
-# TODO: swap in plasma-bigscreen session once it lands in nixpkgs.
+# KDE Plasma Bigscreen desktop for TV-attached nodes (Wayland via SDDM).
+# plasma-bigscreen is built from source (Plasma/6.7 branch) — see pkgs/plasma-bigscreen.nix.
+# When it lands in nixpkgs, delete that file and use kdePackages.plasma-bigscreen directly.
 
 let
+  plasma-bigscreen = import ./pkgs/plasma-bigscreen.nix { inherit pkgs; };
+
   cinemaFredApp = pkgs.symlinkJoin {
     name  = "cinemafred-launcher";
     paths = [
@@ -30,18 +32,19 @@ in
   };
 
   # ── Session ───────────────────────────────────────────────────────────────
-  services.xserver.enable = true;
-
   services.desktopManager.plasma6.enable = true;
 
   services.displayManager.sddm = {
     enable = true;
-    wayland.enable = false;
+    wayland.enable = true;
   };
   services.displayManager = {
-    defaultSession = "plasma";
+    defaultSession = "plasma-bigscreen-wayland";
     autoLogin = { enable = true; user = "media"; };
   };
+
+  # Make SDDM aware of the bigscreen Wayland session file.
+  services.displayManager.sessionPackages = [ plasma-bigscreen ];
 
   users.users.media = {
     isNormalUser = true;
@@ -49,29 +52,12 @@ in
     extraGroups  = [ "video" "input" "audio" ];
   };
 
-  # ── Plasma TV configuration ────────────────────────────────────────────────
-  #
-  # plasma-nano is the minimal Plasma shell (full-screen app grid, no taskbar)
-  # that plasma-bigscreen is built on top of. Once plasma-bigscreen lands in
-  # nixpkgs, swap shell=org.kde.plasma.bigscreen and defaultSession accordingly.
-  environment.etc = {
-    "xdg/plasmarc".text = ''
-      [General]
-      shell=org.kde.plasma.nano
-    '';
-
-    # 144 DPI = 1.5× standard, readable from couch distance at 1080p.
-    "xdg/kcmfonts".text = ''
-      [General]
-      forceFontDPI=144
-    '';
-
-    # Maximize new windows by default; KWin still respects dialogs/transients.
-    "xdg/kwinrc".text = ''
-      [Windows]
-      Placement=Maximized
-    '';
-  };
+  # ── Font scaling ──────────────────────────────────────────────────────────
+  # 144 DPI = 1.5× standard — readable from couch distance at 1080p.
+  environment.etc."xdg/kcmfonts".text = ''
+    [General]
+    forceFontDPI=144
+  '';
 
   # ── Audio ─────────────────────────────────────────────────────────────────
   security.rtkit.enable = true;
@@ -86,18 +72,17 @@ in
 
   # ── Packages ──────────────────────────────────────────────────────────────
   environment.systemPackages = with pkgs; [
-    feishin                    # Jellyfin/Navidrome music client
-    jellyfin-media-player      # mpv-backed Jellyfin client
-    tsukimi                    # Jellyfin client
-    kdePackages.plasmatube     # YouTube via Invidious (no ads, no UA spoofing)
-    kdePackages.plasma-nano    # minimal Plasma shell used by plasma-bigscreen
-    kdePackages.plasma-settings # settings app designed for nano/bigscreen
-    chromium                   # CinemaFred /tv endpoint
-    iwgtk                      # graphical WiFi manager for iwd
-    unclutter-xfixes           # hide cursor after idle (KDE/X11 doesn't do this natively)
-    xterm                      # terminal
-    playerctl                  # MPRIS play/pause
-    wireplumber                # wpctl for volume control
+    plasma-bigscreen               # Plasma TV shell (built from source)
+    feishin                        # Jellyfin/Navidrome music client
+    jellyfin-media-player          # mpv-backed Jellyfin client
+    tsukimi                        # Jellyfin client
+    kdePackages.plasmatube         # YouTube via Invidious (no ads, no UA spoofing)
+    kdePackages.plasma-settings    # settings app designed for bigscreen
+    chromium                       # CinemaFred /tv endpoint
+    iwgtk                          # graphical WiFi manager for iwd
+    xterm                          # terminal
+    playerctl                      # MPRIS play/pause
+    wireplumber                    # wpctl for volume control
     cinemaFredApp
   ];
 }
