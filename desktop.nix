@@ -13,7 +13,7 @@ let
       (pkgs.makeDesktopItem {
         name        = "cinemafred";
         desktopName = "CinemaFred";
-        exec        = "${pkgs.chromium}/bin/chromium --app=https://cinemafred.com/tv --disable-infobars --noerrdialogs --disable-session-crashed-bubble";
+        exec        = "${pkgs.chromium}/bin/chromium --app=https://cinemafred.com/tv --disable-infobars --noerrdialogs --disable-session-crashed-bubble --ozone-platform=wayland --enable-wayland-ime";
         icon        = "cinemafred";
         categories  = [ "AudioVideo" "Video" ];
       })
@@ -58,6 +58,7 @@ in
     description  = "Kiosk media user";
     extraGroups  = [ "video" "input" "audio" "netdev" ];
     hashedPassword = "";
+    openssh.authorizedKeys.keys = config.users.users.fred.openssh.authorizedKeys.keys;
   };
 
   # ── Font scaling ──────────────────────────────────────────────────────────
@@ -94,24 +95,58 @@ in
     [Desktop Entry]
     Hidden=true
   '';
-  environment.etc."xdg/applications/org.kde.kwalletmanager.desktop".text = ''
+  environment.etc."xdg/autostart/org.kde.kwalletmanager.desktop".text = ''
     [Desktop Entry]
     Hidden=true
   '';
-  environment.etc."xdg/applications/org.kde.ark.desktop".text = ''
+  environment.etc."xdg/autostart/org.kde.ark.desktop".text = ''
     [Desktop Entry]
     Hidden=true
   '';
-  environment.etc."xdg/applications/org.kde.klipper.desktop".text = ''
+  environment.etc."xdg/autostart/org.kde.klipper.desktop".text = ''
     [Desktop Entry]
     Hidden=true
   '';
-  environment.etc."xdg/applications/org.kde.ksecretd.desktop".text = ''
+  environment.etc."xdg/autostart/org.kde.ksecretd.desktop".text = ''
     [Desktop Entry]
     Hidden=true
   '';
 
   environment.sessionVariables.QT_IM_MODULE = "maliit";
+
+  # Tell kwin to use maliit as the Wayland input method so it launches
+  # automatically when any text field (Qt or Chromium via zwp_text_input) is focused.
+  environment.etc."xdg/kwinrc".text = ''
+    [Wayland]
+    InputMethod=/run/current-system/sw/share/applications/com.github.maliit.keyboard.desktop
+  '';
+
+  # maliit-server must be running before any text field is focused.
+  # KWin's InputMethod kwinrc key should launch it, but belt-and-suspenders:
+  # start it as a user systemd service so it's always up in the plasma session.
+  systemd.user.services.maliit-server = {
+    description = "Maliit input method server";
+    wantedBy    = [ "graphical-session.target" ];
+    after       = [ "graphical-session.target" ];
+    serviceConfig = {
+      ExecStart = "${pkgs.maliit-framework}/bin/maliit-server";
+      Restart   = "on-failure";
+    };
+  };
+
+  # kglobalaccel ignores /etc/xdg/kglobalshortcutsrc once the user's
+  # ~/.config/kglobalshortcutsrc exists.  Write the Home→Show Desktop
+  # binding directly so it survives across rebuilds.
+  system.activationScripts.mediaKdeShortcuts = ''
+    cfg=/home/media/.config/kglobalshortcutsrc
+    if [ -d /home/media ]; then
+      mkdir -p /home/media/.config
+      if ! grep -q "^Show Desktop=Home" "$cfg" 2>/dev/null; then
+        printf '\n[kwin]\nShow Desktop=Home\t,Meta+D,Show Desktop\n' >> "$cfg"
+      fi
+      chown media:users "$cfg"
+    fi
+  '';
 
   # ── Audio ─────────────────────────────────────────────────────────────────
   security.rtkit.enable = true;
@@ -136,7 +171,8 @@ in
     kdePackages.plasma-nm           # provides org.kde.plasma.networkmanagement QML module
     kdePackages.kdeconnect-kde      # provides org.kde.kdeconnect QML module (HomeHeader indicator)
     pipewire                        # libpipewire-0.3.so for plasmashell audio widget dlopen
-    maliit-keyboard                 # on-screen keyboard for TV text input
+    maliit-framework                # maliit-server daemon (KWin launches it via InputMethod kwinrc key)
+    maliit-keyboard                 # on-screen keyboard QML plugin
     iwgtk                          # graphical WiFi manager for iwd
     xterm                          # terminal
     playerctl                      # MPRIS play/pause
