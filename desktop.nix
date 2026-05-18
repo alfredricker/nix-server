@@ -7,6 +7,15 @@
 let
   plasma-bigscreen = import ./pkgs/plasma-bigscreen.nix { inherit pkgs; };
 
+  # plasma-keyboard's wrapQtAppsHook only adds its own build deps to
+  # QML_IMPORT_PATH.  layer-shell-qt (which provides org.kde.layershell) is a
+  # kwin dep, not a plasma-keyboard dep, so it's missing from the wrapper.
+  plasma-keyboard = pkgs.kdePackages.plasma-keyboard.overrideAttrs (old: {
+    qtWrapperArgs = (old.qtWrapperArgs or []) ++ [
+      "--prefix" "QML_IMPORT_PATH" ":" "${pkgs.kdePackages.layer-shell-qt}/lib/qt-6/qml"
+    ];
+  });
+
   cinemaFredApp = pkgs.symlinkJoin {
     name  = "cinemafred-launcher";
     paths = [
@@ -157,7 +166,7 @@ in
     kdePackages.plasma-nm           # provides org.kde.plasma.networkmanagement QML module
     kdePackages.kdeconnect-kde      # provides org.kde.kdeconnect QML module (HomeHeader indicator)
     pipewire                        # libpipewire-0.3.so for plasmashell audio widget dlopen
-    kdePackages.plasma-keyboard      # on-screen keyboard (Qt6/KDE6-native, launched by KWin)
+    plasma-keyboard                  # on-screen keyboard (Qt6/KDE6-native, launched by KWin)
     iwgtk                          # graphical WiFi manager for iwd
     xterm                          # terminal
     playerctl                      # MPRIS play/pause
