@@ -41,8 +41,7 @@ Four patches required to build against nixpkgs (plasma-workspace 6.6.4):
 - `kdePackages.plasma-nm` — `org.kde.plasma.networkmanagement` QML module (HomeOverlay cascade failure without it)
 - `kdePackages.kdeconnect-kde` — `org.kde.kdeconnect` QML module (HomeHeader indicator)
 - `pipewire` in systemPackages — puts `libpipewire-0.3.so` in `/run/current-system/sw/lib` for plasmashell dlopen
-- `maliit-keyboard` — on-screen keyboard; requires kwinrc InputMethod entry to activate
-- `QT_IM_MODULE = "maliit"` session variable for Qt apps
+- `kdePackages.plasma-keyboard` — on-screen keyboard (Qt6/KDE6-native); kwinrc InputMethod points to `org.kde.plasma.keyboard.desktop`. Switched from maliit (Qt5, kept crashing with GSettings/GLib issues on NixOS).
 
 **Flirc remote keysyms confirmed with wev:**
 - Arrow keys → Left/Right/Up/Down (standard)
@@ -50,7 +49,7 @@ Four patches required to build against nixpkgs (plasma-workspace 6.6.4):
 
 ## Pending / not yet verified
 
-- Virtual keyboard (maliit) in Chromium — fixed root cause (2026-05-17): added `maliit-framework` to systemPackages (provides `maliit-server` binary in PATH; was missing before) plus `systemd.user.services.maliit-server` to guarantee it starts with the graphical session. Needs post-rebuild test.
+- Virtual keyboard in Chromium — switched to `kdePackages.plasma-keyboard` (2026-05-17). Maliit (Qt5) abandoned after persistent core-dump on GSettings init; plasma-keyboard is Qt6/KDE6-native with no GLib dependency, launched on-demand by KWin via kwinrc InputMethod. Needs post-rebuild test.
 - Home button → Show Desktop — fixed approach (2026-05-17): dropped `/etc/xdg/kglobalshortcutsrc` (kglobalaccel ignores it once user's ~/.config/kglobalshortcutsrc exists); replaced with `system.activationScripts.mediaKdeShortcuts` that writes the `Home→Show Desktop` binding directly into `/home/media/.config/kglobalshortcutsrc`. Needs post-rebuild test.
 - App list cleanup — user wants more apps hidden from home screen; needs audit of `/run/current-system/sw/share/applications/` on the node
 - Portal errors ("App info not found for org.kde.*") in journal are benign NixOS-without-flatpak noise, not actionable

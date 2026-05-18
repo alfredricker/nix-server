@@ -112,27 +112,13 @@ in
     Hidden=true
   '';
 
-  environment.sessionVariables.QT_IM_MODULE = "maliit";
-
-  # Tell kwin to use maliit as the Wayland input method so it launches
-  # automatically when any text field (Qt or Chromium via zwp_text_input) is focused.
+  # Tell KWin to use plasma-keyboard as the Wayland input method.
+  # plasma-keyboard is Qt6/KDE6-native; KWin launches it on demand via the
+  # X-KDE-Wayland-VirtualKeyboard desktop entry flag.
   environment.etc."xdg/kwinrc".text = ''
     [Wayland]
-    InputMethod=/run/current-system/sw/share/applications/com.github.maliit.keyboard.desktop
+    InputMethod=/run/current-system/sw/share/applications/org.kde.plasma.keyboard.desktop
   '';
-
-  # maliit-server must be running before any text field is focused.
-  # KWin's InputMethod kwinrc key should launch it, but belt-and-suspenders:
-  # start it as a user systemd service so it's always up in the plasma session.
-  systemd.user.services.maliit-server = {
-    description = "Maliit input method server";
-    wantedBy    = [ "graphical-session.target" ];
-    after       = [ "graphical-session.target" ];
-    serviceConfig = {
-      ExecStart = "${pkgs.maliit-framework}/bin/maliit-server";
-      Restart   = "on-failure";
-    };
-  };
 
   # kglobalaccel ignores /etc/xdg/kglobalshortcutsrc once the user's
   # ~/.config/kglobalshortcutsrc exists.  Write the Home→Show Desktop
@@ -171,8 +157,7 @@ in
     kdePackages.plasma-nm           # provides org.kde.plasma.networkmanagement QML module
     kdePackages.kdeconnect-kde      # provides org.kde.kdeconnect QML module (HomeHeader indicator)
     pipewire                        # libpipewire-0.3.so for plasmashell audio widget dlopen
-    maliit-framework                # maliit-server daemon (KWin launches it via InputMethod kwinrc key)
-    maliit-keyboard                 # on-screen keyboard QML plugin
+    kdePackages.plasma-keyboard      # on-screen keyboard (Qt6/KDE6-native, launched by KWin)
     iwgtk                          # graphical WiFi manager for iwd
     xterm                          # terminal
     playerctl                      # MPRIS play/pause
