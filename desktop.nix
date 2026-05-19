@@ -16,6 +16,20 @@ let
     ];
   });
 
+  wifiMenu = pkgs.writeShellApplication {
+    name = "wifi-menu";
+    runtimeInputs = [ pkgs.iwd pkgs.fzf ];
+    text = builtins.readFile ./pkgs/wifi-menu.sh;
+  };
+
+  wifiApp = pkgs.makeDesktopItem {
+    name        = "wifi-manager";
+    desktopName = "WiFi";
+    exec        = "${pkgs.xterm}/bin/xterm -e ${wifiMenu}/bin/wifi-menu";
+    icon        = "network-wireless";
+    categories  = [ "Settings" "Network" ];
+  };
+
   cinemaFredApp = pkgs.symlinkJoin {
     name  = "cinemafred-launcher";
     paths = [
@@ -129,6 +143,71 @@ in
     InputMethod=/run/current-system/sw/share/applications/org.kde.plasma.keyboard.desktop
   '';
 
+  # Powerdevil: blank screen after 10 min, never suspend, never lock.
+  # Written to user config because powerdevil ignores /etc/xdg for profiles.
+  system.activationScripts.mediaPowerProfile = ''
+    cfg=/home/media/.config/powermanagementprofilesrc
+    if [ -d /home/media ]; then
+      mkdir -p /home/media/.config
+      cat > "$cfg" <<'POWEOF'
+[AC][DPMSControl]
+idleTime=600
+
+[AC][LockBeforeSleep]
+lockEnabled=false
+
+[AC][SuspendSession]
+idleTime=600000
+suspendType=0
+POWEOF
+      chown media:users "$cfg"
+    fi
+  '';
+
+  # Hide apps from Bigscreen launcher. The keep list is:
+  #   CinemaFred, Feishin, Tsukimi, JellyfinDesktop, PlasmaTube,
+  #   Elisa, mobile plasmasettings, and the WiFi launcher.
+  # User-level ~/.local/share/applications/<id>.desktop with Hidden=true
+  # overrides the system entry per XDG spec.
+  system.activationScripts.mediaHideApps = ''
+    dir=/home/media/.local/share/applications
+    if [ -d /home/media ]; then
+      mkdir -p "$dir"
+      for app in \
+        chromium-browser \
+        kdesystemsettings \
+        nixos-manual \
+        org.kde.ark \
+        org.kde.discover \
+        org.kde.dolphin \
+        org.kde.drkonqi.coredump.gui \
+        iwgtk \
+        org.kde.gwenview \
+        org.kde.kate \
+        org.kde.kdeconnect.app \
+        org.kde.kdeconnect.nonplasma \
+        org.kde.kdeconnect.sms \
+        org.kde.khelpcenter \
+        org.kde.kinfocenter \
+        org.kde.kmenuedit \
+        org.kde.konsole \
+        org.kde.kwalletmanager \
+        org.kde.kwrite \
+        org.kde.okular \
+        org.kde.plasma.bigscreen.uvcviewer \
+        org.kde.plasma.emojier \
+        org.kde.plasma-systemmonitor \
+        org.kde.spectacle \
+        plasma-bigscreen-swap-session \
+        systemsettings \
+        xterm \
+      ; do
+        printf '[Desktop Entry]\nHidden=true\n' > "$dir/$app.desktop"
+      done
+      chown -R media:users "$dir"
+    fi
+  '';
+
   # kglobalaccel ignores /etc/xdg/kglobalshortcutsrc once the user's
   # ~/.config/kglobalshortcutsrc exists.  Write the Home→Show Desktop
   # binding directly so it survives across rebuilds.
@@ -167,7 +246,8 @@ in
     kdePackages.kdeconnect-kde      # provides org.kde.kdeconnect QML module (HomeHeader indicator)
     pipewire                        # libpipewire-0.3.so for plasmashell audio widget dlopen
     plasma-keyboard                  # on-screen keyboard (Qt6/KDE6-native, launched by KWin)
-    iwgtk                          # graphical WiFi manager for iwd
+    wifiMenu                       # fzf-based WiFi picker (arrow + Enter, no Tab)
+    wifiApp                        # launcher: xterm -e wifi-menu
     xterm                          # terminal
     playerctl                      # MPRIS play/pause
     wireplumber                    # wpctl for volume control

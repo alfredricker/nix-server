@@ -49,7 +49,54 @@ Four patches required to build against nixpkgs (plasma-workspace 6.6.4):
 
 ## Pending / not yet verified
 
-- Virtual keyboard in Chromium — switched to `kdePackages.plasma-keyboard` (2026-05-17). Maliit (Qt5) abandoned after persistent core-dump on GSettings init; plasma-keyboard is Qt6/KDE6-native with no GLib dependency, launched on-demand by KWin via kwinrc InputMethod. Needs post-rebuild test.
-- Home button → Show Desktop — fixed approach (2026-05-17): dropped `/etc/xdg/kglobalshortcutsrc` (kglobalaccel ignores it once user's ~/.config/kglobalshortcutsrc exists); replaced with `system.activationScripts.mediaKdeShortcuts` that writes the `Home→Show Desktop` binding directly into `/home/media/.config/kglobalshortcutsrc`. Needs post-rebuild test.
 - App list cleanup — user wants more apps hidden from home screen; needs audit of `/run/current-system/sw/share/applications/` on the node
 - Portal errors ("App info not found for org.kde.*") in journal are benign NixOS-without-flatpak noise, not actionable
+
+## Virtual keyboard — integration WORKS (2026-05-19 fresh session)
+
+After SDDM restart on 2026-05-19 15:56 UTC (previous session had been dead since 01:42 UTC), confirmed the full chain works:
+
+- `/run/current-system/sw/bin/plasma-keyboard` is running as media user (auto-spawned by KWin).
+- KWin exposes `/VirtualKeyboard` on D-Bus with `org.kde.kwin.VirtualKeyboard` interface.
+- Properties: `available=true`, `enabled=true`, `willShowOnActive=true`, `activeClientSupportsTextInput=true`.
+- `busctl --user call org.kde.KWin /VirtualKeyboard org.kde.kwin.VirtualKeyboard forceActivate` makes the keyboard appear (`active=true`, `visible=true`) — protocol path end-to-end works.
+
+So the prior "KWin not launching keyboard" diagnosis is resolved: the layer-shell-qt overrideAttrs fix + user `~/.config/kwinrc [Wayland] InputMethod=...` together did the job. KWin had simply never reread the config until the session was fully restarted.
+
+### What still needs physical verification
+
+Auto-show on text-field focus has only been proven at the API level. Needs in-person test:
+1. From the Bigscreen home screen, launch CinemaFred → click into a search/text field on cinemafred.com/tv → keyboard should appear without remote press.
+2. If it doesn't appear, the suspect is Chromium not raising `text_input_v3.enable` for that field — try `chrome://flags` to confirm Wayland IME is on, or test with a Qt app (e.g. kate) to isolate Chromium vs. KWin.
+
+### Fallback if auto-show doesn't fire on focus
+
+Bind the Flirc remote's "keyboard" button (or any spare key) to `qdbus org.kde.KWin /VirtualKeyboard forceActivate` via kglobalshortcutsrc. This gives a manual toggle without abandoning plasma-keyboard.
+
+### Operational note
+
+SDDM `Relogin=true` is set but did NOT autorestart after the 01:42 UTC session crash — sddm-helper kept exiting code 1 silently. If the TV shows nothing after a crash, `sudo systemctl restart display-manager` on freds-node fixes it. Worth investigating why relogin didn't fire.
+
+
+### Desktop Apps
+     
+     org.kde.kdeconnect.sms              KDE Connect SMS
+     Qt;KDE;Network;InstantMessaging
+     org.kde.khelpcenter                 Help Center               Qt;KDE;Core;Documentation;
+     org.kde.kinfocenter                 Info Center               Qt;KDE;System;Documentation;
+     org.kde.kmenuedit                   Menu Editor               Qt;KDE;System;
+     org.kde.konsole                     Konsole
+     Qt;KDE;System;TerminalEmulator;
+     org.kde.kwalletmanager              KWalletManager            Qt;KDE;System;Security;
+     org.kde.kwrite                      KWrite                    Qt;KDE;Utility;TextEditor;
+     org.kde.mobile.plasmasettings       Settings                  Qt;KDE;Settings;
+     org.kde.okular                      Okular
+     Qt;KDE;Graphics;Office;Viewer;
+     org.kde.plasma.bigscreen.uvcviewer  UVC Viewer                AudioVideo
+     org.kde.plasma.emojier              Emoji Selector            Qt;KDE;Utility;
+     org.kde.plasma-systemmonitor        System Monitor            Qt;KDE;System;
+     org.kde.plasmatube                  PlasmaTube                Qt;KDE;AudioVideo;Player;
+     org.kde.spectacle                   Spectacle                 Qt;KDE;Utility;
+     plasma-bigscreen-swap-session       Plasma Bigscreen          AudioVideo
+     systemsettings                      System Settings           Qt;KDE;Settings;
+     xterm                               XTerm                     System;TerminalEmulator;
