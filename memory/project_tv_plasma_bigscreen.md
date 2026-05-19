@@ -77,29 +77,33 @@ Bind the Flirc remote's "keyboard" button (or any spare key) to `qdbus org.kde.K
 
 SDDM `Relogin=true` is set but did NOT autorestart after the 01:42 UTC session crash — sddm-helper kept exiting code 1 silently. If the TV shows nothing after a crash, `sudo systemctl restart display-manager` on freds-node fixes it. Worth investigating why relogin didn't fire.
 
-## App hiding — UPDATED (2026-05-19)
+## App hiding — UPDATED (2026-05-19 v3)
 
 Goal: keep only CinemaFred, Feishin, Tsukimi, JellyfinDesktop, PlasmaTube, Mobile Settings, WiFi launcher.
 
-**Mechanism (current)**: `environment.etc."xdg/applications-blacklistrc"` — native plasma-bigscreen mechanism. `ApplicationListModel::queryApplications()` reads this file directly at runtime; no KSycoca rebuild or activation scripts needed. Format: `[Applications]\nblacklist=id1,id2,...` where IDs are `desktopEntryName()` (filename stem without `.desktop`).
+**Why previous approaches failed**: 
+- `Hidden=true` XDG overrides: KSycoca apparently didn't process them (tried, still showing after reboot)
+- `environment.etc."xdg/applications-blacklistrc"`: plasma-bigscreen-common-env sets `XDG_CONFIG_DIRS=$HOME/.config/plasma-bigscreen:/etc/xdg:...`; plasma-bigscreen-envmanager may write a user file that shadows the system one
 
-**Why switched**: The previous `system.activationScripts.mediaHideApps` with `Hidden=true` XDG overrides depended on KSycoca rebuild timing and had Silent-fail edge cases. The `applications-blacklistrc` is plasma-bigscreen-native, runtime-read, and unambiguous.
+**Current mechanism (two in tandem)**:
+1. `NoDisplay=true` in `~/.local/share/applications/<id>.desktop` — hits `service->noDisplay()` which is verified present in the compiled `org.kde.bigscreen.homescreen.so`
+2. `~/.config/applications-blacklistrc` (user-level, `$XDG_CONFIG_HOME`) — found BEFORE any `$XDG_CONFIG_DIRS` entry including `plasma-bigscreen-envmanager`-written files
 
-**Blacklist IDs verified** against nix store at versions plasma-desktop 6.6.4, plasma-bigscreen 6.6.90, kdeconnect-kde 26.04.0, systemsettings 6.6.4, etc.: `chromium-browser`, `kdesystemsettings`, `systemsettings`, `nixos-manual`, `org.kde.ark`, `org.kde.discover`, `org.kde.dolphin`, `org.kde.drkonqi.coredump.gui`, `org.kde.gwenview`, `org.kde.kate`, `org.kde.kdeconnect.app`, `org.kde.kdeconnect.nonplasma`, `org.kde.kdeconnect.sms`, `org.kde.khelpcenter`, `org.kde.kinfocenter`, `org.kde.kmenuedit`, `org.kde.konsole`, `org.kde.kwalletmanager`, `org.kde.kwrite`, `org.kde.okular`, `org.kde.plasma.bigscreen.uvcviewer`, `org.kde.plasma.emojier`, `org.kde.plasma-systemmonitor`, `org.kde.spectacle`, `plasma-bigscreen-swap-session`.
+Both written by `system.activationScripts.mediaHideApps`.
 
-**Status**: Needs physical verification after next rebuild. If an unknown app still appears, SSH to node and run `kf6-config --path apps` to find its desktop file, then add its stem to the blacklist.
+**App IDs verified** against nix store (same list as before): `chromium-browser`, `kdesystemsettings`, `systemsettings`, `nixos-manual`, `org.kde.ark`, `org.kde.discover`, `org.kde.dolphin`, `org.kde.drkonqi.coredump.gui`, `org.kde.gwenview`, `org.kde.kate`, `org.kde.kdeconnect.app`, `org.kde.kdeconnect.nonplasma`, `org.kde.kdeconnect.sms`, `org.kde.khelpcenter`, `org.kde.kinfocenter`, `org.kde.kmenuedit`, `org.kde.konsole`, `org.kde.kwalletmanager`, `org.kde.kwrite`, `org.kde.okular`, `org.kde.plasma.bigscreen.uvcviewer`, `org.kde.plasma.emojier`, `org.kde.plasma-systemmonitor`, `org.kde.spectacle`, `plasma-bigscreen-swap-session`.
 
-## WiFi — UPDATED (2026-05-19)
+## WiFi — UPDATED (2026-05-19 v3)
 
-**Hardware**: iwlwifi loaded, wlan0 up, iwd running. No driver work needed.
+**Hardware**: iwlwifi loaded, wlan0 up, iwd running.
 
-**Approach**: fzf wrapper script (pkgs/wifi-menu.sh) launched via `konsole -e ${wifiMenu}/bin/wifi-menu` (absolute store path in Exec line). Arrow keys + Enter only.
+**Root cause of auth error**: iwd's D-Bus policy (`$iwd/share/dbus-1/system.d/iwd.conf`) only allows `root` and `wheel` group users to send to `net.connman.iwd`. The `media` user is neither. The bus daemon itself rejects the message with "sender is not authorized" — this fires before any polkit check.
 
-**Script improvements (2026-05-19)**: Removed `set -euo pipefail` (was causing silent close on iwctl failures). Added: `clear` before scanning, explicit error check on `iwctl scan` with held-open message, ANSI escape stripping via `sed`, awk-based column split for multi-word network names, "Press Enter to close" after connection attempt. User sees error messages instead of the window disappearing.
+**Fix**: `services.dbus.packages = [ iwdMediaPolicy ]` adds a `<policy user="media"><allow send_destination="net.connman.iwd"/></policy>` rule. User-context rules take precedence over `context="default"` deny rules in D-Bus policy evaluation.
 
-**Authorization**: iwd uses polkit at_console policy. `iwctl` from SSH sudo fails (not at console). From the physical media session (seat0/tty1 via SDDM autologin) it should pass — this remains to be verified in person.
+**WiFi script**: uses fzf + iwctl. Robustness improvements: no `set -e`, explicit error check on scan, ANSI stripping, awk column split for multi-word SSIDs, "Press Enter to close" at end.
 
-**`netdev` group**: listed in media user config but group doesn't exist on NixOS — silently ignored. Doesn't affect iwd.
+**`netdev` group**: listed in media user config but group doesn't exist on NixOS — silently ignored.
 
 ## Power/sleep
 

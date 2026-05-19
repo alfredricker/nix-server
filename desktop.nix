@@ -7,6 +7,25 @@
 let
   plasma-bigscreen = import ./pkgs/plasma-bigscreen.nix { inherit pkgs; };
 
+  # iwd's D-Bus policy (iwd.conf in nixpkgs) only permits root and wheel.
+  # media is neither, so the bus daemon rejects every iwctl call with
+  # "sender is not authorized".  This policy adds media to the allow list.
+  iwdMediaPolicy = pkgs.writeTextFile {
+    name        = "iwd-media-dbus-policy";
+    destination = "/share/dbus-1/system.d/iwd-media.conf";
+    text = ''
+      <!DOCTYPE busconfig PUBLIC
+        "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN"
+        "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+      <busconfig>
+        <policy user="media">
+          <allow send_destination="net.connman.iwd"/>
+          <allow send_interface="net.connman.iwd.Agent"/>
+        </policy>
+      </busconfig>
+    '';
+  };
+
   # plasma-keyboard's wrapQtAppsHook only adds its own build deps to
   # QML_IMPORT_PATH.  layer-shell-qt (which provides org.kde.layershell) is a
   # kwin dep, not a plasma-keyboard dep, so it's missing from the wrapper.
@@ -53,6 +72,11 @@ in
     enable = true;
     settings.General.EnableNetworkConfiguration = true;
   };
+
+  # Allow the media kiosk user to call iwctl (iwd's own dbus policy only
+  # permits root and wheel; this policy runs at user= precedence which wins
+  # over context="default" deny).
+  services.dbus.packages = [ iwdMediaPolicy ];
 
   # ── Session ───────────────────────────────────────────────────────────────
   services.desktopManager.plasma6.enable = true;
@@ -165,17 +189,71 @@ POWEOF
   '';
 
   # Hide unwanted apps from the Bigscreen launcher.
-  # ApplicationListModel reads this file directly at runtime — no KSycoca rebuild needed.
   # Keep list: CinemaFred, Feishin, Tsukimi, JellyfinDesktop, PlasmaTube,
   #            Mobile Settings (org.kde.mobile.plasmasettings), WiFi launcher.
-  # IDs are desktopEntryName() = filename stem without .desktop, verified against
-  # nix store outputs: plasma-desktop, plasma-bigscreen, kdeconnect-kde,
-  # systemsettings, dolphin, ark, gwenview, kate, khelpcenter, kinfocenter,
-  # okular, spectacle, konsole, discover, plasma-systemmonitor, kmenuedit,
-  # drkonqi, kwalletmanager, chromium-unwrapped.
-  environment.etc."xdg/applications-blacklistrc".text = ''
-    [Applications]
-    blacklist=chromium-browser,kdesystemsettings,nixos-manual,org.kde.ark,org.kde.discover,org.kde.dolphin,org.kde.drkonqi.coredump.gui,org.kde.gwenview,org.kde.kate,org.kde.kdeconnect.app,org.kde.kdeconnect.nonplasma,org.kde.kdeconnect.sms,org.kde.khelpcenter,org.kde.kinfocenter,org.kde.kmenuedit,org.kde.konsole,org.kde.kwalletmanager,org.kde.kwrite,org.kde.okular,org.kde.plasma.bigscreen.uvcviewer,org.kde.plasma.emojier,org.kde.plasma-systemmonitor,org.kde.spectacle,plasma-bigscreen-swap-session,systemsettings
+  #
+  # Two mechanisms in tandem:
+  #   1. NoDisplay=true in ~/.local/share/applications/<id>.desktop
+  #      → KApplicationTrader filter checks service->noDisplay(); confirmed
+  #        present in compiled org.kde.bigscreen.homescreen.so.
+  #   2. ~/.config/applications-blacklistrc with the blacklist key
+  #      → ApplicationListModel::queryApplications() reads this directly;
+  #        written to $XDG_CONFIG_HOME so it's found before any system path
+  #        or plasma-bigscreen-envmanager-written files in ~/.config/plasma-bigscreen/.
+  #
+  # App IDs verified against nix store at plasma-desktop 6.6.4,
+  # plasma-bigscreen 6.6.90, kdeconnect-kde 26.04.0, systemsettings 6.6.4,
+  # dolphin/ark/gwenview/kate/khelpcenter/kinfocenter/okular/spectacle/konsole
+  # 26.04.0, discover/plasma-systemmonitor 6.6.4, kmenuedit 6.6.4,
+  # drkonqi 6.6.4, kwalletmanager 26.04.0, chromium-unwrapped.
+  system.activationScripts.mediaHideApps = let
+    hideList = [
+      "chromium-browser"
+      "kdesystemsettings"
+      "nixos-manual"
+      "org.kde.ark"
+      "org.kde.discover"
+      "org.kde.dolphin"
+      "org.kde.drkonqi.coredump.gui"
+      "org.kde.gwenview"
+      "org.kde.kate"
+      "org.kde.kdeconnect.app"
+      "org.kde.kdeconnect.nonplasma"
+      "org.kde.kdeconnect.sms"
+      "org.kde.khelpcenter"
+      "org.kde.kinfocenter"
+      "org.kde.kmenuedit"
+      "org.kde.konsole"
+      "org.kde.kwalletmanager"
+      "org.kde.kwrite"
+      "org.kde.okular"
+      "org.kde.plasma.bigscreen.uvcviewer"
+      "org.kde.plasma.emojier"
+      "org.kde.plasma-systemmonitor"
+      "org.kde.spectacle"
+      "plasma-bigscreen-swap-session"
+      "systemsettings"
+    ];
+    blacklistValue = lib.concatStringsSep "," hideList;
+  in ''
+    apps_dir=/home/media/.local/share/applications
+    cfg_dir=/home/media/.config
+    if [ -d /home/media ]; then
+      mkdir -p "$apps_dir" "$cfg_dir"
+
+      # 1. NoDisplay=true XDG overrides — hit service->noDisplay() in KSycoca
+      for app in ${lib.escapeShellArgs hideList}; do
+        printf '[Desktop Entry]\nType=Application\nNoDisplay=true\n' \
+          > "$apps_dir/$app.desktop"
+      done
+
+      # 2. User-level blacklist — read directly by ApplicationListModel
+      printf '[Applications]\nblacklist=%s\n' '${blacklistValue}' \
+        > "$cfg_dir/applications-blacklistrc"
+
+      chown -R media:users "$apps_dir"
+      chown media:users "$cfg_dir/applications-blacklistrc"
+    fi
   '';
 
   # kglobalaccel ignores /etc/xdg/kglobalshortcutsrc once the user's
