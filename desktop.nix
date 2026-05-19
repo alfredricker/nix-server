@@ -25,7 +25,7 @@ let
   wifiApp = pkgs.makeDesktopItem {
     name        = "wifi-manager";
     desktopName = "WiFi";
-    exec        = "${pkgs.xterm}/bin/xterm -e ${wifiMenu}/bin/wifi-menu";
+    exec        = "konsole -e ${wifiMenu}/bin/wifi-menu";
     icon        = "network-wireless";
     categories  = [ "Settings" "Network" ];
   };
@@ -202,7 +202,7 @@ POWEOF
         systemsettings \
         xterm \
       ; do
-        printf '[Desktop Entry]\nHidden=true\n' > "$dir/$app.desktop"
+        printf '[Desktop Entry]\nType=Application\nHidden=true\n' > "$dir/$app.desktop"
       done
       chown -R media:users "$dir"
     fi
@@ -246,9 +246,9 @@ POWEOF
     kdePackages.kdeconnect-kde      # provides org.kde.kdeconnect QML module (HomeHeader indicator)
     pipewire                        # libpipewire-0.3.so for plasmashell audio widget dlopen
     plasma-keyboard                  # on-screen keyboard (Qt6/KDE6-native, launched by KWin)
+    kdePackages.konsole            # terminal used by wifi launcher
     wifiMenu                       # fzf-based WiFi picker (arrow + Enter, no Tab)
-    wifiApp                        # launcher: xterm -e wifi-menu
-    xterm                          # terminal
+    wifiApp                        # launcher: konsole -e wifi-menu
     playerctl                      # MPRIS play/pause
     wireplumber                    # wpctl for volume control
     cinemaFredApp
