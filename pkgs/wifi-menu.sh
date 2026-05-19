@@ -52,9 +52,11 @@ if iwctl known-networks list 2>/dev/null | grep -qF "$network"; then
     echo "Connection failed."
   fi
 else
-  printf "Password for %s: " "$network"
-  read -rs password
-  echo
+  # Pre-activate the virtual keyboard so it's visible when the dialog appears.
+  # Without this, the remote needs an extra "up" press to trigger text-input focus.
+  busctl --user call org.kde.KWin /VirtualKeyboard \
+    org.kde.kwin.VirtualKeyboard forceActivate 2>/dev/null || true
+  password=$(kdialog --password "Password for $network:" --title "WiFi") || exit 0
   if iwctl --passphrase "$password" station "$DEVICE" connect "$network"; then
     echo "Connected!"
   else

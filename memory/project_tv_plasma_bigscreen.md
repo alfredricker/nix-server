@@ -7,6 +7,8 @@ metadata:
 
 # Plasma Bigscreen TV Kiosk — freds-node
 
+**SSH access:** `ssh media@freds-node` (kiosk user) or `ssh fred@freds-node` (admin). Both work from the local network by hostname.
+
 TV-attached NUC running NixOS with KDE Plasma Bigscreen as a kiosk shell. Custom package at `pkgs/plasma-bigscreen.nix` (pinned to KDE invent commit `f54b0b4`), config in `desktop.nix`.
 
 **Why:** plasma-bigscreen 6.x not yet in nixpkgs (first stable release 6.7.0, currently 6.6.90 beta). When it lands, delete `pkgs/plasma-bigscreen.nix` and switch to `kdePackages.plasma-bigscreen`.

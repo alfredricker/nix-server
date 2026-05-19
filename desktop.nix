@@ -68,9 +68,17 @@ let
 in
 {
   # ── WiFi ──────────────────────────────────────────────────────────────────
+  # systemd-resolved must be running so iwd can hand off DNS after connect.
+  # Without it iwd logs "!systemd_state.is_ready" and the interface gets an
+  # IP but no DNS — apps appear disconnected even though the link is up.
+  services.resolved.enable = true;
+
   networking.wireless.iwd = {
     enable = true;
-    settings.General.EnableNetworkConfiguration = true;
+    settings = {
+      General.EnableNetworkConfiguration = true;
+      Network.NameResolvingService = "systemd";
+    };
   };
 
   # Allow the media kiosk user to call iwctl (iwd's own dbus policy only
@@ -270,6 +278,23 @@ POWEOF
     fi
   '';
 
+  # Pre-configure PlasmaTube with a public Invidious instance so the "Welcome,
+  # add a source" screen is never shown — bypasses the need to type a URL with
+  # the remote on first launch.  Uses a fixed UUID so rebuilds are idempotent.
+  # Only writes if no [source-*] group exists yet; user-added sources are kept.
+  system.activationScripts.mediaPlasmaTubeSetup = ''
+    statefile=/home/media/.local/state/plasmatubestaterc
+    uuid="a1b2c3d4-e5f6-7890-abcd-ef0123456789"
+    if [ -d /home/media ]; then
+      mkdir -p "$(dirname "$statefile")"
+      if ! grep -q '^\[source-' "$statefile" 2>/dev/null; then
+        printf '\n[General]\nLastSource=%s\n\n[source-%s]\nprotocol=https\ntype=0\nurl=invidious.fdn.fr\n' \
+          "$uuid" "$uuid" >> "$statefile"
+        chown media:users "$statefile"
+      fi
+    fi
+  '';
+
   # ── Audio ─────────────────────────────────────────────────────────────────
   security.rtkit.enable = true;
   services.pipewire = {
@@ -295,6 +320,7 @@ POWEOF
     pipewire                        # libpipewire-0.3.so for plasmashell audio widget dlopen
     plasma-keyboard                  # on-screen keyboard (Qt6/KDE6-native, launched by KWin)
     kdePackages.konsole            # terminal used by wifi launcher
+    kdePackages.kdialog            # KDE dialog for wifi password entry (triggers plasma-keyboard)
     wifiMenu                       # fzf-based WiFi picker (arrow + Enter, no Tab)
     wifiApp                        # launcher: konsole -e wifi-menu
     playerctl                      # MPRIS play/pause
