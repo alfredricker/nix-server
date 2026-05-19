@@ -77,26 +77,30 @@ Bind the Flirc remote's "keyboard" button (or any spare key) to `qdbus org.kde.K
 
 SDDM `Relogin=true` is set but did NOT autorestart after the 01:42 UTC session crash — sddm-helper kept exiting code 1 silently. If the TV shows nothing after a crash, `sudo systemctl restart display-manager` on freds-node fixes it. Worth investigating why relogin didn't fire.
 
+## App hiding — UPDATED (2026-05-19)
 
-### Desktop Apps
-     
-     org.kde.kdeconnect.sms              KDE Connect SMS
-     Qt;KDE;Network;InstantMessaging
-     org.kde.khelpcenter                 Help Center               Qt;KDE;Core;Documentation;
-     org.kde.kinfocenter                 Info Center               Qt;KDE;System;Documentation;
-     org.kde.kmenuedit                   Menu Editor               Qt;KDE;System;
-     org.kde.konsole                     Konsole
-     Qt;KDE;System;TerminalEmulator;
-     org.kde.kwalletmanager              KWalletManager            Qt;KDE;System;Security;
-     org.kde.kwrite                      KWrite                    Qt;KDE;Utility;TextEditor;
-     org.kde.mobile.plasmasettings       Settings                  Qt;KDE;Settings;
-     org.kde.okular                      Okular
-     Qt;KDE;Graphics;Office;Viewer;
-     org.kde.plasma.bigscreen.uvcviewer  UVC Viewer                AudioVideo
-     org.kde.plasma.emojier              Emoji Selector            Qt;KDE;Utility;
-     org.kde.plasma-systemmonitor        System Monitor            Qt;KDE;System;
-     org.kde.plasmatube                  PlasmaTube                Qt;KDE;AudioVideo;Player;
-     org.kde.spectacle                   Spectacle                 Qt;KDE;Utility;
-     plasma-bigscreen-swap-session       Plasma Bigscreen          AudioVideo
-     systemsettings                      System Settings           Qt;KDE;Settings;
-     xterm                               XTerm                     System;TerminalEmulator;
+Goal: keep only CinemaFred, Feishin, Tsukimi, JellyfinDesktop, PlasmaTube, Mobile Settings, WiFi launcher.
+
+**Mechanism (current)**: `environment.etc."xdg/applications-blacklistrc"` — native plasma-bigscreen mechanism. `ApplicationListModel::queryApplications()` reads this file directly at runtime; no KSycoca rebuild or activation scripts needed. Format: `[Applications]\nblacklist=id1,id2,...` where IDs are `desktopEntryName()` (filename stem without `.desktop`).
+
+**Why switched**: The previous `system.activationScripts.mediaHideApps` with `Hidden=true` XDG overrides depended on KSycoca rebuild timing and had Silent-fail edge cases. The `applications-blacklistrc` is plasma-bigscreen-native, runtime-read, and unambiguous.
+
+**Blacklist IDs verified** against nix store at versions plasma-desktop 6.6.4, plasma-bigscreen 6.6.90, kdeconnect-kde 26.04.0, systemsettings 6.6.4, etc.: `chromium-browser`, `kdesystemsettings`, `systemsettings`, `nixos-manual`, `org.kde.ark`, `org.kde.discover`, `org.kde.dolphin`, `org.kde.drkonqi.coredump.gui`, `org.kde.gwenview`, `org.kde.kate`, `org.kde.kdeconnect.app`, `org.kde.kdeconnect.nonplasma`, `org.kde.kdeconnect.sms`, `org.kde.khelpcenter`, `org.kde.kinfocenter`, `org.kde.kmenuedit`, `org.kde.konsole`, `org.kde.kwalletmanager`, `org.kde.kwrite`, `org.kde.okular`, `org.kde.plasma.bigscreen.uvcviewer`, `org.kde.plasma.emojier`, `org.kde.plasma-systemmonitor`, `org.kde.spectacle`, `plasma-bigscreen-swap-session`.
+
+**Status**: Needs physical verification after next rebuild. If an unknown app still appears, SSH to node and run `kf6-config --path apps` to find its desktop file, then add its stem to the blacklist.
+
+## WiFi — UPDATED (2026-05-19)
+
+**Hardware**: iwlwifi loaded, wlan0 up, iwd running. No driver work needed.
+
+**Approach**: fzf wrapper script (pkgs/wifi-menu.sh) launched via `konsole -e ${wifiMenu}/bin/wifi-menu` (absolute store path in Exec line). Arrow keys + Enter only.
+
+**Script improvements (2026-05-19)**: Removed `set -euo pipefail` (was causing silent close on iwctl failures). Added: `clear` before scanning, explicit error check on `iwctl scan` with held-open message, ANSI escape stripping via `sed`, awk-based column split for multi-word network names, "Press Enter to close" after connection attempt. User sees error messages instead of the window disappearing.
+
+**Authorization**: iwd uses polkit at_console policy. `iwctl` from SSH sudo fails (not at console). From the physical media session (seat0/tty1 via SDDM autologin) it should pass — this remains to be verified in person.
+
+**`netdev` group**: listed in media user config but group doesn't exist on NixOS — silently ignored. Doesn't affect iwd.
+
+## Power/sleep
+
+`system.activationScripts.mediaPowerProfile` writes `~/.config/powermanagementprofilesrc` with `suspendType=0` (no sleep) + DPMS screen-off after 10 min + `lockEnabled=false`. kscreenlockerrc already has `Autolock=false`/`LockOnResume=false`. Together these should eliminate any unlock screen on wake.

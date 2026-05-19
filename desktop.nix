@@ -164,48 +164,18 @@ POWEOF
     fi
   '';
 
-  # Hide apps from Bigscreen launcher. The keep list is:
-  #   CinemaFred, Feishin, Tsukimi, JellyfinDesktop, PlasmaTube,
-  #   Elisa, mobile plasmasettings, and the WiFi launcher.
-  # User-level ~/.local/share/applications/<id>.desktop with Hidden=true
-  # overrides the system entry per XDG spec.
-  system.activationScripts.mediaHideApps = ''
-    dir=/home/media/.local/share/applications
-    if [ -d /home/media ]; then
-      mkdir -p "$dir"
-      for app in \
-        chromium-browser \
-        kdesystemsettings \
-        nixos-manual \
-        org.kde.ark \
-        org.kde.discover \
-        org.kde.dolphin \
-        org.kde.drkonqi.coredump.gui \
-        iwgtk \
-        org.kde.gwenview \
-        org.kde.kate \
-        org.kde.kdeconnect.app \
-        org.kde.kdeconnect.nonplasma \
-        org.kde.kdeconnect.sms \
-        org.kde.khelpcenter \
-        org.kde.kinfocenter \
-        org.kde.kmenuedit \
-        org.kde.konsole \
-        org.kde.kwalletmanager \
-        org.kde.kwrite \
-        org.kde.okular \
-        org.kde.plasma.bigscreen.uvcviewer \
-        org.kde.plasma.emojier \
-        org.kde.plasma-systemmonitor \
-        org.kde.spectacle \
-        plasma-bigscreen-swap-session \
-        systemsettings \
-        xterm \
-      ; do
-        printf '[Desktop Entry]\nType=Application\nHidden=true\n' > "$dir/$app.desktop"
-      done
-      chown -R media:users "$dir"
-    fi
+  # Hide unwanted apps from the Bigscreen launcher.
+  # ApplicationListModel reads this file directly at runtime — no KSycoca rebuild needed.
+  # Keep list: CinemaFred, Feishin, Tsukimi, JellyfinDesktop, PlasmaTube,
+  #            Mobile Settings (org.kde.mobile.plasmasettings), WiFi launcher.
+  # IDs are desktopEntryName() = filename stem without .desktop, verified against
+  # nix store outputs: plasma-desktop, plasma-bigscreen, kdeconnect-kde,
+  # systemsettings, dolphin, ark, gwenview, kate, khelpcenter, kinfocenter,
+  # okular, spectacle, konsole, discover, plasma-systemmonitor, kmenuedit,
+  # drkonqi, kwalletmanager, chromium-unwrapped.
+  environment.etc."xdg/applications-blacklistrc".text = ''
+    [Applications]
+    blacklist=chromium-browser,kdesystemsettings,nixos-manual,org.kde.ark,org.kde.discover,org.kde.dolphin,org.kde.drkonqi.coredump.gui,org.kde.gwenview,org.kde.kate,org.kde.kdeconnect.app,org.kde.kdeconnect.nonplasma,org.kde.kdeconnect.sms,org.kde.khelpcenter,org.kde.kinfocenter,org.kde.kmenuedit,org.kde.konsole,org.kde.kwalletmanager,org.kde.kwrite,org.kde.okular,org.kde.plasma.bigscreen.uvcviewer,org.kde.plasma.emojier,org.kde.plasma-systemmonitor,org.kde.spectacle,plasma-bigscreen-swap-session,systemsettings
   '';
 
   # kglobalaccel ignores /etc/xdg/kglobalshortcutsrc once the user's
