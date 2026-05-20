@@ -66,10 +66,12 @@ let
     ];
   };
 
-  # kodi-wayland with JellyCon (Jellyfin addon) and the OSMC skin (clean/dark).
+  arcticFuse3  = import ./pkgs/kodi-skin-arctic-fuse-3.nix { inherit pkgs; };
+
+  # kodi-wayland with JellyCon (Jellyfin addon) and Arctic Fuse 3 skin.
   kodiJellyfin = pkgs.kodi-wayland.withPackages (p: [
     p.jellycon
-    p.osmc-skin
+    arcticFuse3
   ]);
 
   # Brave in app-mode with a SmartTV user-agent so YouTube serves the Leanback
@@ -150,6 +152,12 @@ in
   # permits root and wheel; this policy runs at user= precedence which wins
   # over context="default" deny).
   services.dbus.packages = [ iwdMediaPolicy ];
+
+  # ── Kodi ──────────────────────────────────────────────────────────────────
+  services.xserver.desktopManager.kodi = {
+    enable  = true;
+    package = kodiJellyfin;
+  };
 
   # ── Session ───────────────────────────────────────────────────────────────
   services.desktopManager.plasma6.enable = true;
@@ -347,13 +355,13 @@ POWEOF
     fi
   '';
 
-  # Pre-set Kodi's skin to OSMC on first run so the user never sees Estuary.
+  # Pre-set Arctic Fuse 3 as the Kodi skin on first run.
   # Only writes if guisettings.xml doesn't exist; existing Kodi config is left alone.
   system.activationScripts.mediaKodiSkin = ''
     cfg=/home/media/.kodi/userdata/guisettings.xml
     if [ -d /home/media ] && [ ! -f "$cfg" ]; then
       mkdir -p "$(dirname "$cfg")"
-      printf '<settings version="2">\n    <setting id="lookandfeel.skin" default="true">skin.osmc</setting>\n</settings>\n' \
+      printf '<settings version="2">\n    <setting id="lookandfeel.skin" default="true">skin.arctic.fuse.3</setting>\n</settings>\n' \
         > "$cfg"
       chown -R media:users /home/media/.kodi
     fi
@@ -374,7 +382,6 @@ POWEOF
   environment.systemPackages = with pkgs; [
     plasma-bigscreen               # Plasma TV shell (built from source)
     feishin                        # Jellyfin/Navidrome music client
-    kodiJellyfin                   # Kodi + JellyCon (Jellyfin) + OSMC skin
     brave                          # YouTube TV (Brave Shields ad blocking)
     kdePackages.plasma-settings    # settings app designed for bigscreen
     chromium                       # CinemaFred /tv endpoint
