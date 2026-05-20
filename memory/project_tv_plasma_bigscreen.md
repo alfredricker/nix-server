@@ -81,7 +81,7 @@ SDDM `Relogin=true` is set but did NOT autorestart after the 01:42 UTC session c
 
 ## App hiding — UPDATED (2026-05-19 v3)
 
-Goal: keep only CinemaFred, Feishin, Tsukimi, JellyfinDesktop, PlasmaTube, Mobile Settings, WiFi launcher.
+Goal: keep only CinemaFred, Feishin, Delfin, JellyfinDesktop, PlasmaTube, Mobile Settings, WiFi launcher.
 
 **Why previous approaches failed**: 
 - `Hidden=true` XDG overrides: KSycoca apparently didn't process them (tried, still showing after reboot)

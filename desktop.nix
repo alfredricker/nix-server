@@ -65,6 +65,32 @@ let
       '')
     ];
   };
+
+  # Brave in app-mode with a SmartTV user-agent so YouTube serves the Leanback
+  # d-pad UI rather than detecting a desktop browser and redirecting.
+  # Brave Shields handles ad blocking with no extension management required.
+  youtubeTVLauncher = pkgs.writeShellApplication {
+    name         = "youtube-tv";
+    runtimeInputs = [ pkgs.brave ];
+    text = ''
+      exec brave \
+        --app=https://www.youtube.com/tv \
+        --start-fullscreen \
+        --disable-infobars \
+        --noerrdialogs \
+        --disable-session-crashed-bubble \
+        --ozone-platform=wayland \
+        --user-agent="Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1"
+    '';
+  };
+
+  youtubeTVApp = pkgs.makeDesktopItem {
+    name        = "youtube-tv";
+    desktopName = "YouTube";
+    exec        = "${youtubeTVLauncher}/bin/youtube-tv";
+    icon        = "video-x-generic";
+    categories  = [ "AudioVideo" "Video" ];
+  };
 in
 {
   # ── WiFi ──────────────────────────────────────────────────────────────────
@@ -197,7 +223,7 @@ POWEOF
   '';
 
   # Hide unwanted apps from the Bigscreen launcher.
-  # Keep list: CinemaFred, Feishin, Tsukimi, JellyfinDesktop, PlasmaTube,
+  # Keep list: CinemaFred, Feishin, Delfin, JellyfinDesktop, YouTube TV,
   #            Mobile Settings (org.kde.mobile.plasmasettings), WiFi launcher.
   #
   # Two mechanisms in tandem:
@@ -216,6 +242,7 @@ POWEOF
   # drkonqi 6.6.4, kwalletmanager 26.04.0, chromium-unwrapped.
   system.activationScripts.mediaHideApps = let
     hideList = [
+      "brave-browser"
       "chromium-browser"
       "kdesystemsettings"
       "nixos-manual"
@@ -278,23 +305,6 @@ POWEOF
     fi
   '';
 
-  # Pre-configure PlasmaTube with a public Invidious instance so the "Welcome,
-  # add a source" screen is never shown — bypasses the need to type a URL with
-  # the remote on first launch.  Uses a fixed UUID so rebuilds are idempotent.
-  # Only writes if no [source-*] group exists yet; user-added sources are kept.
-  system.activationScripts.mediaPlasmaTubeSetup = ''
-    statefile=/home/media/.local/state/plasmatubestaterc
-    uuid="a1b2c3d4-e5f6-7890-abcd-ef0123456789"
-    if [ -d /home/media ]; then
-      mkdir -p "$(dirname "$statefile")"
-      if ! grep -q '^\[source-' "$statefile" 2>/dev/null; then
-        printf '\n[General]\nLastSource=%s\n\n[source-%s]\nprotocol=https\ntype=0\nurl=invidious.fdn.fr\n' \
-          "$uuid" "$uuid" >> "$statefile"
-        chown media:users "$statefile"
-      fi
-    fi
-  '';
-
   # ── Audio ─────────────────────────────────────────────────────────────────
   security.rtkit.enable = true;
   services.pipewire = {
@@ -311,8 +321,8 @@ POWEOF
     plasma-bigscreen               # Plasma TV shell (built from source)
     feishin                        # Jellyfin/Navidrome music client
     jellyfin-media-player          # mpv-backed Jellyfin client
-    tsukimi                        # Jellyfin client
-    kdePackages.plasmatube         # YouTube via Invidious (no ads, no UA spoofing)
+    delfin                         # Jellyfin client (mpv backend)
+    brave                          # YouTube TV (Brave Shields ad blocking)
     kdePackages.plasma-settings    # settings app designed for bigscreen
     chromium                       # CinemaFred /tv endpoint
     kdePackages.plasma-nm           # provides org.kde.plasma.networkmanagement QML module
@@ -326,5 +336,6 @@ POWEOF
     playerctl                      # MPRIS play/pause
     wireplumber                    # wpctl for volume control
     cinemaFredApp
+    youtubeTVApp
   ];
 }
