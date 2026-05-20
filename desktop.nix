@@ -66,6 +66,12 @@ let
     ];
   };
 
+  # kodi-wayland with JellyCon (Jellyfin addon) and the OSMC skin (clean/dark).
+  kodiJellyfin = pkgs.kodi-wayland.withPackages (p: [
+    p.jellycon
+    p.osmc-skin
+  ]);
+
   # Brave in app-mode with a SmartTV user-agent so YouTube serves the Leanback
   # d-pad UI rather than detecting a desktop browser and redirecting.
   # Brave Shields handles ad blocking with no extension management required.
@@ -91,6 +97,39 @@ let
     icon        = "video-x-generic";
     categories  = [ "AudioVideo" "Video" ];
   };
+
+  # KWin script: close all normal windows when Show Desktop fires (Home key).
+  # Without this, pressing Home hides apps but leaves them running; clicking
+  # the app in the Bigscreen launcher then opens a second window instead of
+  # focusing the existing one.
+  closeOnShowDesktop =
+    let
+      metadata = builtins.toJSON {
+        KPlugin = {
+          Description      = "Close apps when Show Desktop is triggered";
+          Id               = "close-on-show-desktop";
+          Name             = "Close on Show Desktop";
+          Version          = "1.0";
+          EnabledByDefault = true;
+        };
+      };
+      mainJs = ''
+        workspace.showingDesktopChanged.connect(function(showing) {
+            if (!showing) return;
+            workspace.windowList().forEach(function(w) {
+                if (!w.desktopWindow && !w.dock && !w.toolbar && !w.splash) {
+                    w.closeWindow();
+                }
+            });
+        });
+      '';
+    in
+      pkgs.runCommand "kwin-script-close-on-show-desktop" {} ''
+        dir=$out/share/kwin/scripts/close-on-show-desktop
+        mkdir -p "$dir/contents/code"
+        cp ${pkgs.writeText "metadata.json" metadata} "$dir/metadata.json"
+        cp ${pkgs.writeText "main.js" mainJs} "$dir/contents/code/main.js"
+      '';
 in
 {
   # ── WiFi ──────────────────────────────────────────────────────────────────
@@ -199,6 +238,9 @@ in
   environment.etc."xdg/kwinrc".text = ''
     [Wayland]
     InputMethod=/run/current-system/sw/share/applications/org.kde.plasma.keyboard.desktop
+
+    [Plugins]
+    close-on-show-desktopEnabled=true
   '';
 
   # Powerdevil: blank screen after 10 min, never suspend, never lock.
@@ -223,7 +265,7 @@ POWEOF
   '';
 
   # Hide unwanted apps from the Bigscreen launcher.
-  # Keep list: CinemaFred, Feishin, Delfin, JellyfinDesktop, YouTube TV,
+  # Keep list: CinemaFred, Feishin, Kodi, YouTube TV,
   #            Mobile Settings (org.kde.mobile.plasmasettings), WiFi launcher.
   #
   # Two mechanisms in tandem:
@@ -305,6 +347,18 @@ POWEOF
     fi
   '';
 
+  # Pre-set Kodi's skin to OSMC on first run so the user never sees Estuary.
+  # Only writes if guisettings.xml doesn't exist; existing Kodi config is left alone.
+  system.activationScripts.mediaKodiSkin = ''
+    cfg=/home/media/.kodi/userdata/guisettings.xml
+    if [ -d /home/media ] && [ ! -f "$cfg" ]; then
+      mkdir -p "$(dirname "$cfg")"
+      printf '<settings version="2">\n    <setting id="lookandfeel.skin" default="true">skin.osmc</setting>\n</settings>\n' \
+        > "$cfg"
+      chown -R media:users /home/media/.kodi
+    fi
+  '';
+
   # ── Audio ─────────────────────────────────────────────────────────────────
   security.rtkit.enable = true;
   services.pipewire = {
@@ -320,8 +374,7 @@ POWEOF
   environment.systemPackages = with pkgs; [
     plasma-bigscreen               # Plasma TV shell (built from source)
     feishin                        # Jellyfin/Navidrome music client
-    jellyfin-media-player          # mpv-backed Jellyfin client
-    delfin                         # Jellyfin client (mpv backend)
+    kodiJellyfin                   # Kodi + JellyCon (Jellyfin) + OSMC skin
     brave                          # YouTube TV (Brave Shields ad blocking)
     kdePackages.plasma-settings    # settings app designed for bigscreen
     chromium                       # CinemaFred /tv endpoint
@@ -337,5 +390,6 @@ POWEOF
     wireplumber                    # wpctl for volume control
     cinemaFredApp
     youtubeTVApp
+    closeOnShowDesktop
   ];
 }
