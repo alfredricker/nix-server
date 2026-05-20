@@ -8,7 +8,7 @@ pkgs.stdenv.mkDerivation {
     owner = "jurialmunkey";
     repo  = "skin.arctic.fuse.3";
     rev   = "936c4f3194ec7acae6324296acc1ff3d98605c2e";
-    hash  = pkgs.lib.fakeHash;
+    hash  = "sha256-veWlOiWcQ0BzPx2LFeUjMVXUQp49gdlXhvFBMdWH4oo=";
   };
 
   dontConfigure = true;
