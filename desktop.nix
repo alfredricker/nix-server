@@ -66,14 +66,6 @@ let
     ];
   };
 
-  arcticFuse3  = import ./pkgs/kodi-skin-arctic-fuse-3.nix { inherit pkgs; };
-
-  # kodi-wayland with JellyCon (Jellyfin addon) and Arctic Fuse 3 skin.
-  kodiJellyfin = pkgs.kodi-wayland.withPackages (p: [
-    p.jellycon
-    arcticFuse3
-  ]);
-
   # Brave in app-mode with a SmartTV user-agent so YouTube serves the Leanback
   # d-pad UI rather than detecting a desktop browser and redirecting.
   # Brave Shields handles ad blocking with no extension management required.
@@ -152,12 +144,6 @@ in
   # permits root and wheel; this policy runs at user= precedence which wins
   # over context="default" deny).
   services.dbus.packages = [ iwdMediaPolicy ];
-
-  # ── Kodi ──────────────────────────────────────────────────────────────────
-  services.xserver.desktopManager.kodi = {
-    enable  = true;
-    package = kodiJellyfin;
-  };
 
   # ── Session ───────────────────────────────────────────────────────────────
   services.desktopManager.plasma6.enable = true;
@@ -273,7 +259,7 @@ POWEOF
   '';
 
   # Hide unwanted apps from the Bigscreen launcher.
-  # Keep list: CinemaFred, Feishin, Kodi, YouTube TV,
+  # Keep list: CinemaFred, Feishin, Jellyfin, YouTube TV,
   #            Mobile Settings (org.kde.mobile.plasmasettings), WiFi launcher.
   #
   # Two mechanisms in tandem:
@@ -355,18 +341,6 @@ POWEOF
     fi
   '';
 
-  # Pre-set Arctic Fuse 3 as the Kodi skin on first run.
-  # Only writes if guisettings.xml doesn't exist; existing Kodi config is left alone.
-  system.activationScripts.mediaKodiSkin = ''
-    cfg=/home/media/.kodi/userdata/guisettings.xml
-    if [ -d /home/media ] && [ ! -f "$cfg" ]; then
-      mkdir -p "$(dirname "$cfg")"
-      printf '<settings version="2">\n    <setting id="lookandfeel.skin" default="true">skin.arctic.fuse.3</setting>\n</settings>\n' \
-        > "$cfg"
-      chown -R media:users /home/media/.kodi
-    fi
-  '';
-
   # ── Audio ─────────────────────────────────────────────────────────────────
   security.rtkit.enable = true;
   services.pipewire = {
@@ -395,6 +369,7 @@ POWEOF
     wifiApp                        # launcher: konsole -e wifi-menu
     playerctl                      # MPRIS play/pause
     wireplumber                    # wpctl for volume control
+    jellyfin-media-player
     cinemaFredApp
     youtubeTVApp
     closeOnShowDesktop
