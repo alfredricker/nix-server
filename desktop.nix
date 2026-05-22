@@ -386,7 +386,6 @@ POWEOF
     wifiApp                        # launcher: konsole -e wifi-menu
     playerctl                      # MPRIS play/pause
     wireplumber                    # wpctl for volume control
-    jellyfin-media-player
     jellyfinTVApp
     cinemaFredApp
     youtubeTVApp
