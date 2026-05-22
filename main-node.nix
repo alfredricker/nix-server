@@ -86,6 +86,7 @@
     "d /var/lib/syncthing   0700 syncthing   syncthing   -"
     "d /run/cinemafred      0750 cinemafred  cinemafred  -"
     "d /srv/cinemafred      0750 cinemafred  cinemafred  -"
+    "d /srv/jellyfin-tv    0750 jellyfin-tv jellyfin-tv -"
   ];
 
   # ── Jellyfin ──────────────────────────────────────────────────────────────
@@ -148,6 +149,35 @@
         export LD_LIBRARY_PATH="${pkgs.openssl.out}/lib"
         exec ${pkgs.nodejs}/bin/node server.js
       '';
+      Restart          = "on-failure";
+      RestartSec       = "5s";
+    };
+  };
+
+  # ── Jellyfin TV client ────────────────────────────────────────────────────
+  users.users.jellyfin-tv = {
+    isSystemUser = true;
+    group        = "jellyfin-tv";
+    home         = "/srv/jellyfin-tv";
+  };
+  users.groups.jellyfin-tv = {};
+
+  systemd.services.jellyfin-tv = {
+    description = "Jellyfin TV web client";
+    wantedBy    = [ "multi-user.target" ];
+    after       = [ "network.target" ];
+    environment = {
+      NODE_ENV     = "production";
+      PORT         = "3001";
+      JELLYFIN_URL = "http://localhost:8096";
+      DATA_DIR     = "/srv/jellyfin-tv";
+    };
+    serviceConfig = {
+      Type             = "simple";
+      User             = "jellyfin-tv";
+      Group            = "jellyfin-tv";
+      WorkingDirectory = "/srv/jellyfin-tv";
+      ExecStart        = "${pkgs.nodejs}/bin/node dist/server.js";
       Restart          = "on-failure";
       RestartSec       = "5s";
     };

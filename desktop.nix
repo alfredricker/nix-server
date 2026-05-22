@@ -49,6 +49,23 @@ let
     categories  = [ "Settings" "Network" ];
   };
 
+  jellyfinTVApp = pkgs.symlinkJoin {
+    name  = "jellyfin-tv-launcher";
+    paths = [
+      (pkgs.makeDesktopItem {
+        name        = "jellyfin-tv";
+        desktopName = "Jellyfin";
+        exec        = "${pkgs.chromium}/bin/chromium --app=http://main-node:3001 --start-fullscreen --disable-infobars --noerrdialogs --disable-session-crashed-bubble --ozone-platform=wayland --enable-wayland-ime";
+        icon        = "jellyfin-tv";
+        categories  = [ "AudioVideo" "Video" ];
+      })
+      (pkgs.runCommand "jellyfin-tv-icon" {} ''
+        mkdir -p $out/share/icons/hicolor/scalable/apps
+        cp ${./assets/jellyfin-tv.svg} $out/share/icons/hicolor/scalable/apps/jellyfin-tv.svg
+      '')
+    ];
+  };
+
   cinemaFredApp = pkgs.symlinkJoin {
     name  = "cinemafred-launcher";
     paths = [
@@ -370,6 +387,7 @@ POWEOF
     playerctl                      # MPRIS play/pause
     wireplumber                    # wpctl for volume control
     jellyfin-media-player
+    jellyfinTVApp
     cinemaFredApp
     youtubeTVApp
     closeOnShowDesktop
