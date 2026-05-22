@@ -101,13 +101,26 @@ let
     '';
   };
 
-  youtubeTVApp = pkgs.makeDesktopItem {
-    name        = "youtube-tv";
-    desktopName = "YouTube";
-    exec        = "${youtubeTVLauncher}/bin/youtube-tv";
-    icon        = "video-x-generic";
-    categories  = [ "AudioVideo" "Video" ];
-  };
+  youtubeTVApp =
+    let
+      icon = pkgs.runCommand "youtube-tv-icon" {} ''
+        mkdir -p $out/share/icons/hicolor/scalable/apps
+        cp ${./assets/youtube-tv.svg} $out/share/icons/hicolor/scalable/apps/youtube-tv.svg
+      '';
+    in
+    pkgs.symlinkJoin {
+      name  = "youtube-tv-app";
+      paths = [
+        icon
+        (pkgs.makeDesktopItem {
+          name        = "youtube-tv";
+          desktopName = "YouTube";
+          exec        = "${youtubeTVLauncher}/bin/youtube-tv";
+          icon        = "youtube-tv";
+          categories  = [ "AudioVideo" "Video" ];
+        })
+      ];
+    };
 
   # KWin script: close all normal windows when Show Desktop fires (Home key).
   # Without this, pressing Home hides apps but leaves them running; clicking
