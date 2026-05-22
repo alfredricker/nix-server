@@ -37,12 +37,17 @@
 
       mediaNodes = {
         "freds-node" = { system = "x86_64-linux"; desktop = true; };
+        "nuc3-node"  = { system = "x86_64-linux"; desktop = true; };
         # "la-node"  = { system = "x86_64-linux"; desktop = true;  };
         # "ny-node"  = { system = "x86_64-linux"; desktop = false; };
         # "roc-node" = { system = "x86_64-linux"; desktop = false; };
       };
 
-      # ── Shared NixOS hardware baseline (all nodes are NUC8 BEH) ──────────
+      heroNodes = {
+        "hero1-node" = { system = "x86_64-linux"; desktop = true; };
+      };
+
+      # ── Shared NixOS hardware baseline (NUC8 BEH nodes) ──────────────────
       hardwareModules = hostname: [
         nixos-hardware.nixosModules.intel-nuc-8i7beh
         disko.nixosModules.disko
@@ -54,6 +59,19 @@
           # nixos-hardware defaults to Gen12+ runtimes; override for correct VAAPI paths.
           hardware.intelgpu.computeRuntime = "legacy";
           hardware.intelgpu.mediaRuntime   = "vpl-gpu-rt";
+        }
+      ];
+
+      # ── Hardware baseline for HeroBox (Jasper Lake) ───────────────────────
+      hardwareModulesHero = hostname: [
+        disko.nixosModules.disko
+        ./disko.nix
+        ./hardware/${hostname}.nix
+        {
+          networking.hostName = hostname;
+          # HeroBox has Intel UHD Graphics 600 (Jasper Lake, Gen 11 LP).
+          # No nixos-hardware NUC module — it's not a NUC8 family device.
+          hardware.intelgpu.computeRuntime = "legacy";
         }
       ];
 
@@ -80,9 +98,21 @@
           ] ++ nixpkgs.lib.optional (nodeCfg.desktop or false) ./desktop.nix;
         };
 
+      mkHeroNode = hostname: nodeCfg:
+        nixpkgs.lib.nixosSystem {
+          system      = nodeCfg.system;
+          specialArgs = { inherit hostname clusterConfig; };
+          modules = hardwareModulesHero hostname ++ [
+            agenix.nixosModules.default
+            ./common.nix
+            ./media-node.nix
+          ] ++ nixpkgs.lib.optional (nodeCfg.desktop or false) ./desktop.nix;
+        };
+
     in {
       nixosConfigurations =
         nixpkgs.lib.mapAttrs mkMainNode mainNode //
-        nixpkgs.lib.mapAttrs mkMediaNode mediaNodes;
+        nixpkgs.lib.mapAttrs mkMediaNode mediaNodes //
+        nixpkgs.lib.mapAttrs mkHeroNode heroNodes;
     };
 }
