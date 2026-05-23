@@ -367,6 +367,27 @@ POWEOF
     fi
   '';
 
+  # KWin reads ~/.config/kwinrc once Plasma has written it and stops honoring
+  # /etc/xdg/kwinrc for the [Wayland] section. Without InputMethod set there,
+  # KWin never launches plasma-keyboard and busctl reports available=false.
+  # Idempotently ensure the user kwinrc has the line.
+  system.activationScripts.mediaKwinInputMethod = ''
+    if [ -d /home/media ]; then
+      mkdir -p /home/media/.config
+      chown media:users /home/media/.config
+      cfg=/home/media/.config/kwinrc
+      target=/run/current-system/sw/share/applications/org.kde.plasma.keyboard.desktop
+      if [ ! -e "$cfg" ]; then
+        printf '[Wayland]\nInputMethod=%s\n' "$target" > "$cfg"
+      elif ! grep -q '^\[Wayland\]' "$cfg"; then
+        printf '\n[Wayland]\nInputMethod=%s\n' "$target" >> "$cfg"
+      elif ! grep -qE '^InputMethod=.*plasma\.keyboard' "$cfg"; then
+        sed -i "/^\[Wayland\]/a InputMethod=$target" "$cfg"
+      fi
+      chown media:users "$cfg"
+    fi
+  '';
+
   # kglobalaccel ignores /etc/xdg/kglobalshortcutsrc once the user's
   # ~/.config/kglobalshortcutsrc exists.  Write the Home→Show Desktop
   # binding directly so it survives across rebuilds.
