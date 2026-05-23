@@ -3,12 +3,9 @@
 Repeat for each media-node (la-node, roc-node, etc.). Replace `la-node` with the
 actual hostname throughout.
 
-```bash
-nixos-rebuild switch --flake .#la-node --target-host root@<current-ip>
-```
-
-The IP is only needed at deploy time — pass it on the command line. No IP is stored
-in the flake, so the node can move to a new network without any config changes.
+> **SSH note:** `root` login requires a key but none is configured — always connect
+> as `fred` with `--use-remote-sudo` (except nixos-anywhere, which manages its own
+> temporary key).
 
 ---
 
@@ -23,7 +20,7 @@ mediaNodes = {
 ### 2. Create hardware config
 
 ```bash
-cp hardware/main-node.nix hardware/la-node.nix
+cp hardware/template-nuc8i3beh.nix hardware/la-node.nix
 # Edit la-node.nix: update the comment at the top, verify interface name (eno1)
 ```
 
@@ -34,47 +31,74 @@ cloudflared tunnel create la-node
 cloudflared tunnel route dns la-node node-la-node.rickermedia.com
 ```
 
-### 4. Set up agenix secrets
+This writes a credentials JSON to `~/.cloudflared/<tunnel-id>.json`.
 
-Get the node's host key after initial install (see step 5), then add to
-`secrets/secrets.nix`:
+### 4. Encrypt the tunnel secret (fred's key only — no node key yet)
+
+The node's SSH host key doesn't exist until after first install, so encrypt with
+only your personal key for now. You'll re-encrypt with the node's key in step 7.
+
+Add to `secrets/secrets.nix`:
 
 ```nix
-la-node = "ssh-ed25519 AAAA... <paste key>";
-
-"cloudflare-tunnel-la-node.age".publicKeys = [ fred la-node ];
-"cloudflare-kv-token.age".publicKeys       = [ fred main-node la-node ];
+"cloudflare-tunnel-la-node.age".publicKeys = [ fred ];
 ```
 
-Encrypt the secrets:
+Then create the secret:
 
 ```bash
 cd secrets/
+# Paste the contents of ~/.cloudflared/<tunnel-id>.json when the editor opens
 nix run github:ryantm/agenix -- -e cloudflare-tunnel-la-node.age
-nix run github:ryantm/agenix -- -r   # re-encrypts kv-token with the new node's key
 ```
+
+Commit the new `.age` file so the flake can find it.
 
 ### 5. Initial install
 
-Boot the NUC from the NixOS minimal ISO, get its IP, then:
+Boot the node from the NixOS minimal ISO. Get its current IP from your router,
+then run nixos-anywhere from this repo:
 
 ```bash
 nix run github:nix-community/nixos-anywhere -- --flake .#la-node root@<ip>
 ```
 
-After reboot, get the host key and add it to `secrets/secrets.nix`:
+The node reboots into NixOS when done.
+
+### 6. Get the node's SSH host key
 
 ```bash
 ssh-keyscan -t ed25519 <la-node-ip>
+# Copy the third field (the key itself, starting with AAAA...)
 ```
 
-### 6. Deploy
+### 7. Re-encrypt secrets with the node's host key
+
+Add the node key to `secrets/secrets.nix`:
+
+```nix
+la-node = "ssh-ed25519 AAAA... <paste key>";
+
+# Update the tunnel entry to include the node key:
+"cloudflare-tunnel-la-node.age".publicKeys = [ fred la-node ];
+# Add la-node to the kv-token so the node can read it at runtime:
+"cloudflare-kv-token.age".publicKeys       = [ fred main-node la-node ];
+```
+
+Re-encrypt:
 
 ```bash
-nixos-rebuild switch --flake .#la-node --target-host root@<current-ip>
+cd secrets/
+nix run github:ryantm/agenix -- -r
 ```
 
-### 7. Connect to Tailscale
+### 8. Deploy with the updated secrets
+
+```bash
+nixos-rebuild switch --flake .#la-node --target-host root@<la-node-ip>
+```
+
+### 9. Connect to Tailscale
 
 SSH into the node and run:
 
@@ -93,7 +117,7 @@ sudo tailscale up --accept-routes --auth-key=tskey-auth-...
 The node self-registers in Cloudflare Workers KV within 90 seconds and the
 cinemafred.com Worker starts routing traffic to it automatically.
 
-### 8. Verify
+### 10. Verify
 
 ```bash
 # Check KV registration

@@ -269,10 +269,15 @@ in
 
   # Powerdevil: blank screen after 10 min, never suspend, never lock.
   # Written to user config because powerdevil ignores /etc/xdg for profiles.
+  # Activation scripts run as root, so any directory they `mkdir -p` ends up
+  # root-owned unless explicitly chowned — which locks the media user out of
+  # its own ~/.config and ~/.local trees. Each script below chowns every
+  # parent dir it touches, not just the file it writes.
   system.activationScripts.mediaPowerProfile = ''
-    cfg=/home/media/.config/powermanagementprofilesrc
     if [ -d /home/media ]; then
       mkdir -p /home/media/.config
+      chown media:users /home/media/.config
+      cfg=/home/media/.config/powermanagementprofilesrc
       cat > "$cfg" <<'POWEOF'
 [AC][DPMSControl]
 idleTime=600
@@ -340,7 +345,12 @@ POWEOF
     apps_dir=/home/media/.local/share/applications
     cfg_dir=/home/media/.config
     if [ -d /home/media ]; then
-      mkdir -p "$apps_dir" "$cfg_dir"
+      # Chown every parent dir we create — `mkdir -p` would otherwise leave
+      # .local and .local/share root-owned.
+      for d in /home/media/.config /home/media/.local /home/media/.local/share "$apps_dir"; do
+        mkdir -p "$d"
+        chown media:users "$d"
+      done
 
       # 1. NoDisplay=true XDG overrides — hit service->noDisplay() in KSycoca
       for app in ${lib.escapeShellArgs hideList}; do
@@ -361,9 +371,10 @@ POWEOF
   # ~/.config/kglobalshortcutsrc exists.  Write the Home→Show Desktop
   # binding directly so it survives across rebuilds.
   system.activationScripts.mediaKdeShortcuts = ''
-    cfg=/home/media/.config/kglobalshortcutsrc
     if [ -d /home/media ]; then
       mkdir -p /home/media/.config
+      chown media:users /home/media/.config
+      cfg=/home/media/.config/kglobalshortcutsrc
       if ! grep -q "^Show Desktop=Home" "$cfg" 2>/dev/null; then
         printf '\n[kwin]\nShow Desktop=Home\t,Meta+D,Show Desktop\n' >> "$cfg"
       fi
