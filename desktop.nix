@@ -403,6 +403,52 @@ POWEOF
     fi
   '';
 
+  # ── Browser policies (kill kiosk-unfriendly popups) ───────────────────────
+  # Chromium reads /etc/chromium/policies/managed/*.json; Brave reads
+  # /etc/brave/policies/managed/*.json. These suppress save-password,
+  # autofill, translate, sign-in, default-browser, and sync prompts that
+  # otherwise pop over CinemaFred/Jellyfin (chromium --app) and YouTube TV
+  # (brave --app).
+  programs.chromium = {
+    enable = true;
+    extraOpts = {
+      PasswordManagerEnabled       = false;
+      AutofillAddressEnabled       = false;
+      AutofillCreditCardEnabled    = false;
+      TranslateEnabled             = false;
+      DefaultBrowserSettingEnabled = false;
+      BrowserSignin                = 0;
+      SyncDisabled                 = true;
+      MetricsReportingEnabled      = false;
+      SearchSuggestEnabled         = false;
+      PromotionalTabsEnabled       = false;
+      BrowserAddPersonEnabled      = false;
+      BackgroundModeEnabled        = false;
+      BookmarkBarEnabled           = false;
+    };
+  };
+
+  environment.etc."brave/policies/managed/kiosk.json".text = builtins.toJSON {
+    PasswordManagerEnabled       = false;
+    AutofillAddressEnabled       = false;
+    AutofillCreditCardEnabled    = false;
+    TranslateEnabled             = false;
+    DefaultBrowserSettingEnabled = false;
+    BrowserSignin                = 0;
+    SyncDisabled                 = true;
+    MetricsReportingEnabled      = false;
+    SearchSuggestEnabled         = false;
+    PromotionalTabsEnabled       = false;
+    BrowserAddPersonEnabled      = false;
+    BackgroundModeEnabled        = false;
+    BookmarkBarEnabled           = false;
+    # Brave-specific noise suppressors
+    BraveRewardsDisabled         = true;
+    BraveWalletDisabled          = true;
+    BraveVPNDisabled             = true;
+    BraveAIChatEnabled           = false;
+  };
+
   # ── Audio ─────────────────────────────────────────────────────────────────
   security.rtkit.enable = true;
   services.pipewire = {

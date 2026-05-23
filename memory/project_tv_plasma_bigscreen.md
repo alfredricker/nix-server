@@ -65,6 +65,8 @@ After SDDM restart on 2026-05-19 15:56 UTC (previous session had been dead since
 
 So the prior "KWin not launching keyboard" diagnosis is resolved: the layer-shell-qt overrideAttrs fix + user `~/.config/kwinrc [Wayland] InputMethod=...` together did the job. KWin had simply never reread the config until the session was fully restarted.
 
+**Important**: `/etc/xdg/kwinrc` is *shadowed* once Plasma writes `~/.config/kwinrc` — the system file's `[Wayland] InputMethod=` never takes effect on a fresh node. Confirmed 2026-05-23 when nuc3-node was deployed via deploy-media.md and the keyboard didn't work (busctl reported `available=false`) despite `desktop.nix` writing `/etc/xdg/kwinrc`. Fixed by adding `system.activationScripts.mediaKwinInputMethod` to `desktop.nix` which idempotently injects `[Wayland] InputMethod=...` into the user's `~/.config/kwinrc` (creates section if missing, inserts InputMethod line under existing section if needed). All future nodes get this on first rebuild.
+
 ### What still needs physical verification
 
 Auto-show on text-field focus has only been proven at the API level. Needs in-person test:
