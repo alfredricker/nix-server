@@ -169,10 +169,11 @@
     wantedBy    = [ "multi-user.target" ];
     after       = [ "network.target" ];
     environment = {
-      NODE_ENV     = "production";
-      PORT         = "3001";
-      JELLYFIN_URL = "http://localhost:8096";
-      DATA_DIR     = "/srv/jellyfin-tv";
+      NODE_ENV            = "production";
+      PORT                = "3001";
+      JELLYFIN_URL        = "http://localhost:8096";
+      PUBLIC_JELLYFIN_URL = "http://main-node:8096";
+      DATA_DIR            = "/srv/jellyfin-tv";
     };
     serviceConfig = {
       Type             = "simple";
