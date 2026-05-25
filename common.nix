@@ -27,11 +27,7 @@
       RemainAfterExit = true;
     };
     script = ''
-      state=$(${pkgs.tailscale}/bin/tailscale status --json 2>/dev/null \
-        | grep -o '"BackendState":"[^"]*"' | cut -d'"' -f4)
-      if [ "$state" != "Running" ]; then
-        ${pkgs.tailscale}/bin/tailscale up --accept-routes
-      fi
+      ${pkgs.tailscale}/bin/tailscale up --accept-routes --accept-dns
     '';
   };
 
