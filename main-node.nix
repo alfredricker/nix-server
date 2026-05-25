@@ -88,7 +88,6 @@
     "d /var/lib/syncthing   0700 syncthing   syncthing   -"
     "d /run/cinemafred      0750 cinemafred  cinemafred  -"
     "d /srv/cinemafred      0750 cinemafred  cinemafred  -"
-    "d /srv/jellyfin-tv    0750 jellyfin-tv jellyfin-tv -"
   ];
 
   # ── Jellyfin ──────────────────────────────────────────────────────────────
@@ -156,36 +155,6 @@
     };
   };
 
-  # ── Jellyfin TV client ────────────────────────────────────────────────────
-  users.users.jellyfin-tv = {
-    isSystemUser = true;
-    group        = "jellyfin-tv";
-    home         = "/srv/jellyfin-tv";
-  };
-  users.groups.jellyfin-tv = {};
-
-  systemd.services.jellyfin-tv = {
-    description = "Jellyfin TV web client";
-    wantedBy    = [ "multi-user.target" ];
-    after       = [ "network.target" ];
-    environment = {
-      NODE_ENV            = "production";
-      PORT                = "3001";
-      JELLYFIN_URL        = "http://localhost:8096";
-      PUBLIC_JELLYFIN_URL = "http://main-node:8096";
-      DATA_DIR            = "/srv/jellyfin-tv";
-    };
-    serviceConfig = {
-      Type             = "simple";
-      User             = "jellyfin-tv";
-      Group            = "jellyfin-tv";
-      WorkingDirectory = "/srv/jellyfin-tv";
-      ExecStart        = "${pkgs.nodejs}/bin/node dist/server.js";
-      Restart          = "on-failure";
-      RestartSec       = "5s";
-    };
-  };
-
   # ── Nginx (cinemafred HLS origin) ─────────────────────────────────────────
   #
   # Binds to all interfaces so media-nodes can reach it over Tailscale as a
@@ -231,10 +200,6 @@
   age.secrets."cloudflare-tunnel-cinemafred-origin" = {
     file = ./secrets/cloudflare-tunnel-cinemafred-origin.age;
     path = "/run/secrets/cloudflare-tunnel-cinemafred-origin.json";
-  };
-  age.secrets."cloudflare-kv-token" = {
-    file = ./secrets/cloudflare-kv-token.age;
-    path = "/run/secrets/cloudflare-kv-token";
   };
   age.secrets."cloudflare-tunnel-cinemafred-app" = {
     file = ./secrets/cloudflare-tunnel-cinemafred-app.age;

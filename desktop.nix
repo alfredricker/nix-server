@@ -55,7 +55,7 @@ let
       (pkgs.makeDesktopItem {
         name        = "jellyfin-tv";
         desktopName = "Jellyfin";
-        exec        = "${pkgs.chromium}/bin/chromium --app=http://main-node:3001 --start-fullscreen --disable-infobars --noerrdialogs --disable-session-crashed-bubble --ozone-platform=wayland --enable-wayland-ime";
+        exec        = "${pkgs.chromium}/bin/chromium --app=http://localhost:3001 --start-fullscreen --disable-infobars --noerrdialogs --disable-session-crashed-bubble --ozone-platform=wayland --enable-wayland-ime";
         icon        = "jellyfin-tv";
         categories  = [ "AudioVideo" "Video" ];
       })
@@ -156,6 +156,44 @@ let
       '';
 in
 {
+  # ── Jellyfin TV client ────────────────────────────────────────────────────
+  #
+  # Runs locally on each desktop node so login sessions are per-node and
+  # accounts added on one node don't appear on others.
+  # Connects to main-node's Jellyfin server over Tailscale.
+  users.users.jellyfin-tv = {
+    isSystemUser = true;
+    group        = "jellyfin-tv";
+    home         = "/srv/jellyfin-tv";
+  };
+  users.groups.jellyfin-tv = {};
+
+  systemd.tmpfiles.rules = [
+    "d /srv/jellyfin-tv 0750 jellyfin-tv jellyfin-tv -"
+  ];
+
+  systemd.services.jellyfin-tv = {
+    description = "Jellyfin TV web client";
+    wantedBy    = [ "multi-user.target" ];
+    after       = [ "network.target" "tailscale-login.service" ];
+    environment = {
+      NODE_ENV            = "production";
+      PORT                = "3001";
+      JELLYFIN_URL        = "http://main-node.headnet.local:8096";
+      PUBLIC_JELLYFIN_URL = "http://main-node.headnet.local:8096";
+      DATA_DIR            = "/srv/jellyfin-tv";
+    };
+    serviceConfig = {
+      Type             = "simple";
+      User             = "jellyfin-tv";
+      Group            = "jellyfin-tv";
+      WorkingDirectory = "/srv/jellyfin-tv";
+      ExecStart        = "${pkgs.nodejs}/bin/node dist/server.js";
+      Restart          = "on-failure";
+      RestartSec       = "5s";
+    };
+  };
+
   # ── WiFi ──────────────────────────────────────────────────────────────────
   # systemd-resolved must be running so iwd can hand off DNS after connect.
   # Without it iwd logs "!systemd_state.is_ready" and the interface gets an

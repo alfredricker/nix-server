@@ -10,19 +10,6 @@
 
   outputs = { self, nixpkgs, nixos-hardware, disko, agenix }:
     let
-      # ── Cluster-wide constants ─────────────────────────────────────────────
-      #
-      # These are not secrets — they're config values visible in the Cloudflare
-      # dashboard. Secrets (tunnel credentials, KV API token) live in agenix.
-      #
-      # cfAccountId:     Cloudflare → top-right account menu → "Account ID"
-      # cfKvNamespaceId: run `wrangler kv namespace create NODES_KV` to create,
-      #                  then paste the returned id here and in wrangler.toml
-      clusterConfig = {
-        cfAccountId     = "17eb349fd2bf73bcaa03d603e8152f91";
-        cfKvNamespaceId = "cf786905cd1a44c78f06eabbe58f82dc";
-      };
-
       # ── Cluster topology ──────────────────────────────────────────────────
       #
       # main-node:   central server — authoritative data, Jellyfin, Syncthing,
@@ -79,7 +66,7 @@
       mkMainNode = hostname: nodeCfg:
         nixpkgs.lib.nixosSystem {
           system      = nodeCfg.system;
-          specialArgs = { inherit hostname clusterConfig; };
+          specialArgs = { inherit hostname; };
           modules     = hardwareModules hostname ++ [
             agenix.nixosModules.default
             ./common.nix
@@ -90,7 +77,7 @@
       mkMediaNode = hostname: nodeCfg:
         nixpkgs.lib.nixosSystem {
           system      = nodeCfg.system;
-          specialArgs = { inherit hostname clusterConfig; };
+          specialArgs = { inherit hostname; };
           modules = hardwareModules hostname ++ [
             agenix.nixosModules.default
             ./common.nix
@@ -101,7 +88,7 @@
       mkHeroNode = hostname: nodeCfg:
         nixpkgs.lib.nixosSystem {
           system      = nodeCfg.system;
-          specialArgs = { inherit hostname clusterConfig; };
+          specialArgs = { inherit hostname; };
           modules = hardwareModulesHero hostname ++ [
             agenix.nixosModules.default
             ./common.nix
