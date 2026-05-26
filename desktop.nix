@@ -179,8 +179,8 @@ in
     environment = {
       NODE_ENV            = "production";
       PORT                = "3001";
-      JELLYFIN_URL        = "http://main-node.headnet.local:8096";
-      PUBLIC_JELLYFIN_URL = "http://main-node.headnet.local:8096";
+      JELLYFIN_URL        = "http://main-node:8096";
+      PUBLIC_JELLYFIN_URL = "http://main-node:8096";
       DATA_DIR            = "/srv/jellyfin-tv";
     };
     serviceConfig = {
