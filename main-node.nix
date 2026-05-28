@@ -249,7 +249,9 @@
   systemd.services."cloudflared-tunnel-cinemafred-app".serviceConfig.DynamicUser    = lib.mkForce false;
 
   # ── Packages ──────────────────────────────────────────────────────────────
-  environment.systemPackages = with pkgs; [ git ];
+  # nodejs + openssl are needed at deploy time for `npx prisma generate` /
+  # `prisma migrate deploy` against the cinemafred database.
+  environment.systemPackages = with pkgs; [ git nodejs openssl ];
 
   # ── Static IP ─────────────────────────────────────────────────────────────
   networking.interfaces.eno1.ipv4.addresses = [{
