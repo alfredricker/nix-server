@@ -36,28 +36,42 @@
     enable  = true;
     package = pkgs.postgresql_16;
     settings.listen_addresses = lib.mkForce "*";
-    ensureDatabases = [ "cinemafred" ];
-    ensureUsers = [{
-      name             = "cinemafred";
-      ensureDBOwnership = true;
-    }];
+    ensureDatabases = [ "cinemafred" "docmost" ];
+    ensureUsers = [
+      {
+        name             = "cinemafred";
+        ensureDBOwnership = true;
+      }
+      {
+        name             = "docmost";
+        ensureDBOwnership = true;
+      }
+    ];
     authentication = pkgs.lib.mkOverride 10 ''
     # TYPE  DATABASE    USER        ADDRESS           METHOD
     local   all         postgres                      peer
     local   cinemafred  cinemafred                    peer
     host    cinemafred  cinemafred  127.0.0.1/32      scram-sha-256
     host    cinemafred  cinemafred  100.64.0.0/10     scram-sha-256
+    local   docmost     docmost                       peer
+    host    docmost     docmost     127.0.0.1/32      scram-sha-256
     '';
   };
 
-  # Set the cinemafred role password from an agenix secret each boot.
-  # The secret must be owned by postgres so the service can read it.
+  # Set app role passwords from agenix secrets each boot.
+  # The secrets must be owned by postgres so the service can read them.
   age.secrets."postgres-cinemafred-password" = {
     file  = ./secrets/postgres-cinemafred-password.age;
     path  = "/run/secrets/postgres-cinemafred-password";
     owner = "postgres";
     group = "cinemafred";
     mode  = "0640";
+  };
+  age.secrets."postgres-docmost-password" = {
+    file  = ./secrets/postgres-docmost-password.age;
+    path  = "/run/secrets/postgres-docmost-password";
+    owner = "postgres";
+    mode  = "0600";
   };
 
   systemd.services.cinemafred-db-password = {
@@ -76,6 +90,22 @@
     '';
   };
 
+  systemd.services.docmost-db-password = {
+    description = "Apply docmost PostgreSQL role password";
+    after       = [ "postgresql.service" "postgresql-setup.service" ];
+    requires    = [ "postgresql.service" ];
+    wantedBy    = [ "multi-user.target" ];
+    serviceConfig = {
+      Type            = "oneshot";
+      RemainAfterExit = true;
+      User            = "postgres";
+    };
+    script = ''
+      ${config.services.postgresql.package}/bin/psql \
+        -c "ALTER ROLE docmost WITH PASSWORD '$(cat /run/secrets/postgres-docmost-password)'"
+    '';
+  };
+
   # ── Local data directories ─────────────────────────────────────────────────
   systemd.tmpfiles.rules = [
     "d /data                0755 root        root        -"
@@ -88,6 +118,8 @@
     "d /var/lib/syncthing   0700 syncthing   syncthing   -"
     "d /run/cinemafred      0750 cinemafred  cinemafred  -"
     "d /srv/cinemafred      0750 cinemafred  cinemafred  -"
+    # 1000:1000 matches the "node" user the docmost container runs as.
+    "d /data/docmost        0750 1000        1000        -"
   ];
 
   # ── Jellyfin ──────────────────────────────────────────────────────────────
@@ -155,6 +187,32 @@
     };
   };
 
+  # ── Docmost ───────────────────────────────────────────────────────────────
+  #
+  # Docmost has no nixpkgs package, so it runs as the official OCI image via
+  # podman. --network=host lets the container reach Postgres/Redis on
+  # 127.0.0.1 directly, matching every other service on this host — it also
+  # means docmost's own PORT must move off 3000 since cinemafred already
+  # owns that port on the host.
+  services.redis.servers.docmost = {
+    enable = true;
+    port   = 6379;
+    bind   = "127.0.0.1";
+  };
+
+  virtualisation.oci-containers.backend = "podman";
+  virtualisation.oci-containers.containers.docmost = {
+    image           = "docmost/docmost:latest";
+    autoStart       = true;
+    extraOptions    = [ "--network=host" ];
+    environmentFiles = [ "/run/secrets/docmost-env" ];
+    volumes         = [ "/data/docmost:/app/data/storage" ];
+  };
+  systemd.services."podman-docmost" = {
+    after    = [ "postgresql.service" "docmost-db-password.service" "redis-docmost.service" ];
+    requires = [ "postgresql.service" "docmost-db-password.service" "redis-docmost.service" ];
+  };
+
   # ── Nginx (cinemafred HLS origin) ─────────────────────────────────────────
   #
   # Binds to all interfaces so media-nodes can reach it over Tailscale as a
@@ -205,6 +263,14 @@
     file = ./secrets/cloudflare-tunnel-cinemafred-app.age;
     path = "/run/secrets/cloudflare-tunnel-cinemafred-app.json";
   };
+  age.secrets."cloudflare-tunnel-docmost" = {
+    file = ./secrets/cloudflare-tunnel-docmost.age;
+    path = "/run/secrets/cloudflare-tunnel-docmost.json";
+  };
+  age.secrets."docmost-env" = {
+    file = ./secrets/docmost-env.age;
+    path = "/run/secrets/docmost-env";
+  };
 
   # ── Cloudflare Tunnels ────────────────────────────────────────────────────
   #
@@ -212,14 +278,17 @@
   # main-node.rickermedia.com  → Nginx HLS origin (used by the cinemafred.com
   #                              Cloudflare Worker as the final fallback when
   #                              no media-node edge is reachable)
+  # wiki.demi-labs.com         → Docmost
   #
   # Provision:
   #   cloudflared tunnel create jellyfin
   #   cloudflared tunnel create cinemafred-origin
+  #   cloudflared tunnel create docmost
   # Store credentials at /run/secrets/cloudflare-tunnel-<name>.json (agenix/sops-nix)
   # Route DNS:
   #   cloudflared tunnel route dns jellyfin         jellyfin.rickermedia.com
   #   cloudflared tunnel route dns cinemafred-origin main-node.rickermedia.com
+  #   cloudflared tunnel route dns docmost           wiki.demi-labs.com
   #
   # cinemafred.com itself is handled by a Cloudflare Worker (see worker/).
   services.cloudflared = {
@@ -240,6 +309,11 @@
       ingress."cinemafred.com"     = "http://127.0.0.1:3000";
       ingress."www.cinemafred.com" = "http://127.0.0.1:3000";
     };
+    tunnels."docmost" = {
+      credentialsFile = "/run/secrets/cloudflare-tunnel-docmost.json";
+      default         = "http_status:404";
+      ingress."wiki.demi-labs.com" = "http://127.0.0.1:3002";
+    };
   };
 
   # DynamicUser=true (cloudflared module default) prevents LoadCredential from
@@ -247,6 +321,7 @@
   systemd.services."cloudflared-tunnel-jellyfin".serviceConfig.DynamicUser          = lib.mkForce false;
   systemd.services."cloudflared-tunnel-cinemafred-origin".serviceConfig.DynamicUser = lib.mkForce false;
   systemd.services."cloudflared-tunnel-cinemafred-app".serviceConfig.DynamicUser    = lib.mkForce false;
+  systemd.services."cloudflared-tunnel-docmost".serviceConfig.DynamicUser           = lib.mkForce false;
 
   # ── Packages ──────────────────────────────────────────────────────────────
   # nodejs + openssl are needed at deploy time for `npx prisma generate` /

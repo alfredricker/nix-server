@@ -21,4 +21,7 @@ in
   "cloudflare-tunnel-cinemafred-origin.age".publicKeys = [ fred main-node ];
   "cloudflare-tunnel-cinemafred-app.age".publicKeys    = [ fred main-node ];
   "postgres-cinemafred-password.age".publicKeys        = [ fred main-node ];
+  "cloudflare-tunnel-docmost.age".publicKeys           = [ fred main-node ];
+  "postgres-docmost-password.age".publicKeys           = [ fred main-node ];
+  "docmost-env.age".publicKeys                         = [ fred main-node ];
 }

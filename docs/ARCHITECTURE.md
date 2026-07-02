@@ -14,7 +14,8 @@ Always headless. The single source of truth for all media files.
 |---|---|
 | **Jellyfin** | Streams music, movies, and TV. Exposed publicly at `jellyfin.rickermedia.com` and over Tailscale |
 | **Nginx** | Serves HLS video segments for cinemafred.com; binds to all interfaces so media-nodes can proxy from it over Tailscale |
-| **Cloudflare Tunnels** | `jellyfin.rickermedia.com`, `node-main.rickermedia.com` — no inbound firewall ports opened |
+| **Docmost** | Wiki/knowledge base, run as a podman container (no nixpkgs package). Exposed publicly at `wiki.demi-labs.com` and over Tailscale |
+| **Cloudflare Tunnels** | `jellyfin.rickermedia.com`, `node-main.rickermedia.com`, `wiki.demi-labs.com` — no inbound firewall ports opened |
 
 Local data layout:
 
@@ -226,6 +227,8 @@ Selecting an app opens it fullscreen. Closing it returns to the menu.
 |---|---|---|---|
 | `jellyfin` | `jellyfin.rickermedia.com` | `:8096` (Jellyfin) | main-node |
 | `cinemafred-origin` | `node-main.rickermedia.com` | `:8080` (Nginx) | main-node |
+| `cinemafred-app` | `cinemafred.com` | `:3000` (CinemaFred app) | main-node |
+| `docmost` | `wiki.demi-labs.com` | `:3002` (Docmost) | main-node |
 | `<hostname>` | `node-<hostname>.rickermedia.com` | `:8080` (Nginx cache) | each media-node |
 
 ### Worker
@@ -259,6 +262,9 @@ git.
 |---|---|---|
 | `cloudflare-tunnel-jellyfin.json` | main-node | Tunnel credentials for jellyfin tunnel |
 | `cloudflare-tunnel-cinemafred-origin.json` | main-node | Tunnel credential for cinemafred origin |
+| `cloudflare-tunnel-docmost.json` | main-node | Tunnel credential for docmost (`wiki.demi-labs.com`) |
+| `postgres-docmost-password` | main-node | Docmost Postgres role password |
+| `docmost-env` | main-node | Docmost container env (`APP_URL`, `APP_SECRET`, `DATABASE_URL`, `REDIS_URL`, `PORT`) |
 | `cloudflare-tunnel-<hostname>.json` | each media-node | Tunnel credential for that node's edge tunnel |
 | `cloudflare-kv-token` | all nodes | API token for writing to Workers KV (node registration) |
 
@@ -269,7 +275,7 @@ git.
 ```
 flake.nix          cluster topology, clusterConfig constants, node builders
 common.nix         SSH, fred user, Tailscale client, KV registration timer (all nodes)
-main-node.nix      Jellyfin, Nginx HLS origin, Cloudflare Tunnels, local /data/
+main-node.nix      Jellyfin, Nginx HLS origin, Docmost (podman), Cloudflare Tunnels, local /data/
 media-node.nix     Nginx edge cache, prefetch daemon, Cloudflare Tunnel
 desktop.nix        TV kiosk — greetd + cage + Feishin/jellyfin-media-player/FreeTube/Chromium
 disko.nix          disk partitioning layout (applied to all nodes)
