@@ -4,6 +4,8 @@
 # cinemafred HLS origin. Not a GlusterFS peer — data lives on local storage.
 
 {
+  imports = [ ./dream-trader ];
+
   # ── Storage ───────────────────────────────────────────────────────────────
   fileSystems."/data" = {
     device  = "/dev/disk/by-id/ata-WDC_WD140EDGZ-11CMYA0_T1G4XKUN-part1";
@@ -120,6 +122,9 @@
     "d /srv/cinemafred      0750 cinemafred  cinemafred  -"
     # 1000:1000 matches the "node" user the docmost container runs as.
     "d /data/docmost        0750 1000        1000        -"
+    "d /opt/dream-trader           0750 dream-trader dream-trader -"
+    "d /opt/dream-trader/bin       0750 dream-trader dream-trader -"
+    "d /opt/dream-trader/pystats   0750 dream-trader dream-trader -"
   ];
 
   # ── Jellyfin ──────────────────────────────────────────────────────────────
@@ -326,7 +331,9 @@
   # ── Packages ──────────────────────────────────────────────────────────────
   # nodejs + openssl are needed at deploy time for `npx prisma generate` /
   # `prisma migrate deploy` against the cinemafred database.
-  environment.systemPackages = with pkgs; [ git nodejs openssl ];
+  # uv is only used for the one-time (and per-deploy) pystats venv setup —
+  # see docs/deploy-dream-trader.md.
+  environment.systemPackages = with pkgs; [ git nodejs openssl uv ];
 
   # ── Static IP ─────────────────────────────────────────────────────────────
   networking.interfaces.eno1.ipv4.addresses = [{
