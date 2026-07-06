@@ -128,8 +128,8 @@ Run all four — not just the happy path:
    no-new-entries within one cycle. Clear it, restart the worker.
 3. **Dead-man's switch:** during market hours (or a mocked calendar),
    `systemctl stop dream-trader-runner` → a `critical` message should land
-   in Discord within ~5 min (`dream-trader-watchdog.timer` fires every 2 min
-   during 09:30–16:00 ET). Restart the runner.
+   in Discord within ~5 min (`dream-trader-watchdog.timer` fires every 2 min,
+   roughly 09:00–16:58 ET). Restart the runner.
 4. **Reboot:** `reboot` the host → all units return, runner reconciles and
    resumes unattended. (Also confirms this doesn't collide with Jellyfin/
    Docmost/CinemaFred/Postgres coming back up on the same host.)
@@ -142,7 +142,7 @@ Run all four — not just the happy path:
 |---|---|
 | Runner | `/srv/dream-trader/bin/dream-trader-runner`, always-on, no resource cap |
 | Worker | `/srv/dream-trader/bin/dream-trader-worker`, MemoryMax=3G, CPUQuota=200% |
-| Watchdog | oneshot, fired by `dream-trader-watchdog.timer` (Mon–Fri 09:30–16:00 America/New_York) |
+| Watchdog | oneshot, fired by `dream-trader-watchdog.timer` (Mon–Fri, roughly 09:00–16:58 America/New_York, every 2 min) |
 | pystats | `/srv/dream-trader/pystats/.venv/bin/uvicorn`, `127.0.0.1:8420`, no env vars |
 | Database | Neon Postgres (external) — no local Postgres role/database |
 | Alerts | Go binaries → ntfy.sh → `dream-trader-discord-bridge` → Discord webhook |

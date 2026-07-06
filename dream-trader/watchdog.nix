@@ -28,11 +28,21 @@
     };
   };
 
+  # "09:30..16:00:00/2" doesn't parse — systemd calendar syntax can't apply
+  # a step to a combined HH:MM..HH:MM:SS range like that (confirmed with
+  # `systemd-analyze calendar` on main-node, which rejected it outright and
+  # left the timer in a bad-setting/inactive state). "9..16:00/2:00" is the
+  # form that actually parses: hour range 9-16, minute stepped by 2, second
+  # pinned to 0. This fires roughly 09:00-16:58 ET instead of exactly
+  # 09:30-16:00 — a bit wider than intended, but harmless: the watchdog
+  # binary only gates on cal.IsTradingDay(now), not hour-of-day, and the
+  # runner is always-on, so the extra ~30min on each side just re-confirms
+  # a heartbeat that's already fresh.
   systemd.timers.dream-trader-watchdog = {
     description = "Dream Trader watchdog timer";
     wantedBy    = [ "timers.target" ];
     timerConfig = {
-      OnCalendar = "Mon..Fri *-*-* 09:30..16:00:00/2 America/New_York";
+      OnCalendar = "Mon..Fri *-*-* 9..16:00/2:00 America/New_York";
       Persistent = true;
     };
   };
