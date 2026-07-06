@@ -5,6 +5,16 @@
 { ... }:
 
 {
+  # `uv venv`/`uv sync` (run manually at deploy time — see
+  # docs/deploy-dream-trader.md) download a portable CPython build that's a
+  # generic dynamically-linked Linux binary; NixOS has no /lib64/ld-linux at
+  # the standard FHS path, so it fails with exit 127. nix-ld provides the
+  # compatibility shim these foreign binaries expect (and covers any
+  # manylinux wheel .so's numpy/scipy pull in too). It's a no-op for every
+  # other service on this host — only affects processes that go looking for
+  # the standard dynamic loader path.
+  programs.nix-ld.enable = true;
+
   systemd.tmpfiles.rules = [
     "d /srv/dream-trader/pystats  0750 dream-trader dream-trader -"
   ];

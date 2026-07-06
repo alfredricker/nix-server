@@ -80,7 +80,7 @@ code — see the caveat above).
 #### 3. Deploy the NixOS config
 
 ```bash
-nixos-rebuild switch --flake .#main-node --target-host root@10.0.0.64
+nixos-rebuild switch --flake .#main-node --target-host root@main-node
 ```
 
 This creates the `dream-trader` user, `/srv/dream-trader/{bin,pystats}`, and
@@ -98,20 +98,20 @@ GOOS=linux GOARCH=amd64 go build -ldflags "-X main.build=$GIT_SHA" -o build/depl
 GOOS=linux GOARCH=amd64 go build -ldflags "-X main.build=$GIT_SHA" -o build/deploy/dream-trader-worker   ./cmd/worker
 GOOS=linux GOARCH=amd64 go build -ldflags "-X main.build=$GIT_SHA" -o build/deploy/dream-trader-watchdog ./cmd/watchdog
 
-rsync -avz build/deploy/ root@10.0.0.64:/srv/dream-trader/bin/
-rsync -avz --exclude __pycache__ --exclude .venv pystats/ root@10.0.0.64:/srv/dream-trader/pystats/
+rsync -avz build/deploy/ root@main-node:/srv/dream-trader/bin/
+rsync -avz --exclude __pycache__ --exclude .venv pystats/ root@main-node:/srv/dream-trader/pystats/
 
-ssh root@10.0.0.64 chown -R dream-trader:dream-trader /srv/dream-trader
-ssh root@10.0.0.64 'cd /srv/dream-trader/pystats && sudo -u dream-trader uv venv .venv && sudo -u dream-trader uv sync'
+ssh root@main-node chown -R dream-trader:dream-trader /srv/dream-trader
+ssh root@main-node 'cd /srv/dream-trader/pystats && sudo -u dream-trader uv venv .venv && sudo -u dream-trader uv sync'
 
-ssh root@10.0.0.64 systemctl restart dream-trader-pystats dream-trader-runner dream-trader-worker
+ssh root@main-node systemctl restart dream-trader-pystats dream-trader-runner dream-trader-worker
 ```
 
 Check it started cleanly:
 
 ```bash
-ssh root@10.0.0.64 systemctl status dream-trader-runner dream-trader-worker dream-trader-pystats
-ssh root@10.0.0.64 journalctl -fu dream-trader-runner
+ssh root@main-node systemctl status dream-trader-runner dream-trader-worker dream-trader-pystats
+ssh root@main-node journalctl -fu dream-trader-runner
 ```
 
 ---
