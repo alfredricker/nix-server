@@ -18,6 +18,12 @@
     wantedBy    = [ "multi-user.target" ];
     after       = [ "network-online.target" "dream-trader-runner.service" "dream-trader-pystats.service" ];
     wants       = [ "network-online.target" ];
+    # Give up after 5 crashes in 5 minutes instead of restarting forever —
+    # a broken deploy should land in `failed` (visible via systemctl/monitoring),
+    # not loop silently. Clear with `systemctl reset-failed dream-trader-worker`
+    # once the underlying issue is fixed.
+    startLimitIntervalSec = 300;
+    startLimitBurst       = 5;
     serviceConfig = {
       Type            = "simple";
       User            = "dream-trader";
