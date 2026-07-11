@@ -40,6 +40,11 @@ done
 The node activates the new config immediately — no reboot needed unless the kernel
 changed. If a reboot is required, `nixos-rebuild` will tell you.
 
+## Deploy a config change MacOS
+```bash
+nix run nixpkgs#nixos-rebuild -- switch --flake .#freds-node --target-host root@freds-node --build-host root@freds-node
+```
+
 ---
 
 ## Update NixOS packages (bump flake inputs)
