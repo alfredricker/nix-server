@@ -28,6 +28,10 @@
       # scripts/deploy.sh (which names binaries without the dream-trader-
       # prefix); /srv/dream-trader/bin was the old hand-copied location.
       ExecStart       = "/srv/dream-trader/releases/current/bin/runner";
+      # The binaries resolve strategy/, data/indices, promotion_policy.yaml
+      # and costs.yaml relative to CWD; deploy.sh ships them at the release
+      # root in that layout.
+      WorkingDirectory = "/srv/dream-trader/releases/current";
       EnvironmentFile = "/run/secrets/dream-trader-runner-env";
       Restart         = "always";
       RestartSec      = "5s";

@@ -25,6 +25,8 @@
       User            = "dream-trader";
       # deploy.sh's atomic-release symlink — see runner.nix.
       ExecStart       = "/srv/dream-trader/releases/current/bin/watchdog";
+      # Configs/strategy/data ship at the release root — see runner.nix.
+      WorkingDirectory = "/srv/dream-trader/releases/current";
       EnvironmentFile = "/run/secrets/dream-trader-watchdog-env";
     };
   };
