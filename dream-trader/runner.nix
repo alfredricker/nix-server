@@ -24,7 +24,10 @@
     serviceConfig = {
       Type            = "simple";
       User            = "dream-trader";
-      ExecStart       = "/srv/dream-trader/bin/dream-trader-runner";
+      # releases/current is the atomic symlink flipped by dream-trader's
+      # scripts/deploy.sh (which names binaries without the dream-trader-
+      # prefix); /srv/dream-trader/bin was the old hand-copied location.
+      ExecStart       = "/srv/dream-trader/releases/current/bin/runner";
       EnvironmentFile = "/run/secrets/dream-trader-runner-env";
       Restart         = "always";
       RestartSec      = "5s";

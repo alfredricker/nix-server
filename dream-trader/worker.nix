@@ -27,7 +27,8 @@
     serviceConfig = {
       Type            = "simple";
       User            = "dream-trader";
-      ExecStart       = "/srv/dream-trader/bin/dream-trader-worker";
+      # deploy.sh's atomic-release symlink — see runner.nix.
+      ExecStart       = "/srv/dream-trader/releases/current/bin/worker";
       EnvironmentFile = "/run/secrets/dream-trader-worker-env";
       Restart         = "always";
       RestartSec      = "30s";

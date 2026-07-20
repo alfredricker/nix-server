@@ -23,7 +23,8 @@
     serviceConfig = {
       Type            = "oneshot";
       User            = "dream-trader";
-      ExecStart       = "/srv/dream-trader/bin/dream-trader-watchdog";
+      # deploy.sh's atomic-release symlink — see runner.nix.
+      ExecStart       = "/srv/dream-trader/releases/current/bin/watchdog";
       EnvironmentFile = "/run/secrets/dream-trader-watchdog-env";
     };
   };

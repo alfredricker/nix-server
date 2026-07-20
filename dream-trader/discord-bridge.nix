@@ -26,9 +26,11 @@
     serviceConfig = {
       Type            = "simple";
       User            = "dream-trader";
-      EnvironmentFile = "/run/secrets/dream-trader-discord-webhook";
       ExecStart       = pkgs.writeShellScript "dream-trader-discord-bridge" ''
         set -uo pipefail
+        # The secret is the bare webhook URL, not KEY=VALUE — read it directly
+        # instead of via EnvironmentFile (which silently ignores bare lines).
+        DISCORD_WEBHOOK_URL=$(cat /run/secrets/dream-trader-discord-webhook)
         ${pkgs.curl}/bin/curl -Ns "https://ntfy.sh/dream-trader-critical,dream-trader-actionable,dream-trader-info/json" \
           | while IFS= read -r line; do
               msg=$(printf '%s' "$line" | ${pkgs.jq}/bin/jq -c 'select(.event == "message") | {content: ("**[" + .topic + "]** " + (.title // "") + " " + (.message // ""))}')
