@@ -1,12 +1,8 @@
 { config, pkgs, lib, ... }:
 
 # KDE Plasma Bigscreen desktop for TV-attached nodes (Wayland via SDDM).
-# plasma-bigscreen is built from source (Plasma/6.7 branch) — see pkgs/plasma-bigscreen.nix.
-# When it lands in nixpkgs, delete that file and use kdePackages.plasma-bigscreen directly.
 
 let
-  plasma-bigscreen = import ./pkgs/plasma-bigscreen.nix { inherit pkgs; };
-
   # iwd's D-Bus policy (iwd.conf in nixpkgs) only permits root and wheel.
   # media is neither, so the bus daemon rejects every iwctl call with
   # "sender is not authorized".  This policy adds media to the allow list.
@@ -129,6 +125,10 @@ let
   closeOnShowDesktop =
     let
       metadata = builtins.toJSON {
+        # KWin 6 refuses to load a script whose metadata lacks this top-level
+        # key — it logs "KPackageStructure ... does not match requested format
+        # \"KWin/Script\"" and silently skips the plugin.
+        KPackageStructure = "KWin/Script";
         KPlugin = {
           Description      = "Close apps when Show Desktop is triggered";
           Id               = "close-on-show-desktop";
@@ -233,7 +233,7 @@ in
   };
 
   # Make SDDM aware of the bigscreen Wayland session file.
-  services.displayManager.sessionPackages = [ plasma-bigscreen ];
+  services.displayManager.sessionPackages = [ pkgs.kdePackages.plasma-bigscreen ];
 
   users.users.media = {
     isNormalUser = true;
@@ -500,7 +500,7 @@ POWEOF
 
   # ── Packages ──────────────────────────────────────────────────────────────
   environment.systemPackages = with pkgs; [
-    plasma-bigscreen               # Plasma TV shell (built from source)
+    kdePackages.plasma-bigscreen   # Plasma TV shell
     feishin                        # Jellyfin/Navidrome music client
     brave                          # YouTube TV (Brave Shields ad blocking)
     kdePackages.plasma-settings    # settings app designed for bigscreen
