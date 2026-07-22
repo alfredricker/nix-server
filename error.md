@@ -1,0 +1,13 @@
+removing obsolete symlink ‘/etc/ssh/moduli’...
+restarting systemd...
+reloading user units for root...
+NOT restarting the following user units: systemd-tmpfiles-setup.service
+reloading the following user units: dbus-broker.service
+restarting the following user units: nixos-activation.service
+restarting sysinit-reactivation.target
+reloading the following units: dbus-broker.service, firewall.service, reload-systemd-vconsole-setup.service, systemd-logind.service
+restarting the following units: dhcpcd.service, network-addresses-eno1.service, nginx.service, nix-daemon.service, sshd.service, systemd-journald.service, systemd-udevd.service, tailscaled.service
+starting the following units: cinemafred-db-password.service, cinemafred.service, cloudflared-tunnel-cinemafred-app.service, cloudflared-tunnel-cinemafred-origin.service, cloudflared-tunnel-docmost.service, cloudflared-tunnel-jellyfin.service, docmost-db-password.service, dream-trader-discord-bridge.service, dream-trader-pystats.service, dream-trader-runner.service, dream-trader-worker.service, jellyfin.service, kmod-static-nodes.service, logrotate-checkconf.service, nscd.service, podman-docmost.service, postgresql-setup.service, postgresql.service, redis-docmost.service, resolvconf.service, syncthing-init.service, syncthing.service, systemd-fsck-root.service, systemd-modules-load.service, systemd-oomd.socket, systemd-sysctl.service, systemd-timesyncd.service, systemd-tmpfiles-resetup.service, systemd-vconsole-setup.service, tailscale-login.service, thermald.service, wd-drive-no-spindown.service
+Failed to start syncthing-init.service
+the following new units were started: system-systemd\x2dcoredump.slice, systemd-ask-password.socket, systemd-factory-reset.socket, systemd-importd.socket, systemd-machined.socket, systemd-mute-console.socket, systemd-repart.socket, systemd-udevd-varlink.socket, time-set.target, var-lib-containers-storage-overlay-8c1b06f1b8a9258d8d0bbea243ec86210b02c035667eaad24a96a81764d50fca-merged.mount, var-lib-containers-storage-overlay\x2dcontainers-67a66581ebe2d705a3a4550c84b7215bbb0ee02aade0a2ea357adff6d70c3ea3-userdata-shm.mount
+Command 'ssh -o ControlMaster=auto -o ControlPath=/tmp/nixos-rebuild.npnpmqcx/ssh-%C -o ControlPersist=60 root@main-node -- /bin/sh -c ''"'"'exec /usr/bin/env -i PATH="${PATH-}" LOCALE_ARCHIVE="${LOCALE_ARCHIVE-}" NIXOS_NO_CHECK="${NIXOS_NO_CHECK-}" NIXOS_INSTALL_BOOTLOADER=0 "$@"'"'"'' sh systemd-run -E LOCALE_ARCHIVE -E NIXOS_INSTALL_BOOTLOADER -E NIXOS_NO_CHECK --collect --no-ask-password --pipe --quiet --service-type=exec --unit=nixos-rebuild-switch-to-configuration /nix/store/5lgprkhxxmz81r1f69n16w825n48rk89-nixos-system-main-node-26.11.20260719.241313f/bin/switch-to-configuration switch' returned non-zero exit status 4.

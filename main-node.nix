@@ -158,6 +158,18 @@
     };
   };
 
+  # The media dirs are 0770 jellyfin:jellyfin, so syncthing needs the group to
+  # scan them and to write its .stfolder markers.
+  users.users.syncthing.extraGroups = [ "jellyfin" ];
+
+  # Upstream declares syncthing-init with only `Requisite=syncthing.service`,
+  # which does not pull syncthing.service into the same start transaction. On a
+  # switch that restarts both, syncthing-init can be activated while syncthing
+  # is still starting; Requisite then fails instantly and takes the whole
+  # activation down with it (exit 4). Requires= puts them in one transaction so
+  # the existing After= ordering actually applies.
+  systemd.services.syncthing-init.requires = [ "syncthing.service" ];
+
   # ── CinemaFred app ────────────────────────────────────────────────────────
   users.users.cinemafred = {
     isSystemUser = true;
