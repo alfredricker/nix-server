@@ -3,25 +3,6 @@
 # KDE Plasma Bigscreen desktop for TV-attached nodes (Wayland via SDDM).
 
 let
-  # iwd's D-Bus policy (iwd.conf in nixpkgs) only permits root and wheel.
-  # media is neither, so the bus daemon rejects every iwctl call with
-  # "sender is not authorized".  This policy adds media to the allow list.
-  iwdMediaPolicy = pkgs.writeTextFile {
-    name        = "iwd-media-dbus-policy";
-    destination = "/share/dbus-1/system.d/iwd-media.conf";
-    text = ''
-      <!DOCTYPE busconfig PUBLIC
-        "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN"
-        "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
-      <busconfig>
-        <policy user="media">
-          <allow send_destination="net.connman.iwd"/>
-          <allow send_interface="net.connman.iwd.Agent"/>
-        </policy>
-      </busconfig>
-    '';
-  };
-
   # plasma-keyboard's wrapQtAppsHook only adds its own build deps to
   # QML_IMPORT_PATH.  layer-shell-qt (which provides org.kde.layershell) is a
   # kwin dep, not a plasma-keyboard dep, so it's missing from the wrapper.
@@ -30,20 +11,6 @@ let
       "--prefix" "QML_IMPORT_PATH" ":" "${pkgs.kdePackages.layer-shell-qt}/lib/qt-6/qml"
     ];
   });
-
-  wifiMenu = pkgs.writeShellApplication {
-    name = "wifi-menu";
-    runtimeInputs = [ pkgs.iwd pkgs.fzf ];
-    text = builtins.readFile ./pkgs/wifi-menu.sh;
-  };
-
-  wifiApp = pkgs.makeDesktopItem {
-    name        = "wifi-manager";
-    desktopName = "WiFi";
-    exec        = "konsole -e ${wifiMenu}/bin/wifi-menu";
-    icon        = "network-wireless";
-    categories  = [ "Settings" "Network" ];
-  };
 
   jellyfinTVApp = pkgs.symlinkJoin {
     name  = "jellyfin-tv-launcher";
@@ -195,23 +162,28 @@ in
   };
 
   # ── WiFi ──────────────────────────────────────────────────────────────────
-  # systemd-resolved must be running so iwd can hand off DNS after connect.
-  # Without it iwd logs "!systemd_state.is_ready" and the interface gets an
-  # IP but no DNS — apps appear disconnected even though the link is up.
+  # NetworkManager owns addressing; iwd is only the wifi backend. plasma-nm
+  # then provides the network UI inside plasma-settings, which is d-pad
+  # navigable and hooks the virtual keyboard properly — so there is no custom
+  # TUI to maintain.
+  #
+  # networking.wireless.iwd.enable is NOT set here: the networkmanager module
+  # turns it on itself when wifi.backend = "iwd".
+  #
+  # iwd must not do its own network configuration in this mode. The module
+  # does not manage that setting, so the previous
+  # General.EnableNetworkConfiguration = true would leave iwd running DHCP
+  # against the same interface NM is configuring. Leaving it unset (iwd's
+  # default of false) hands addressing and DNS entirely to NM.
+  #
+  # Saved PSKs live in /var/lib/iwd and are untouched by this change — the
+  # iwd backend keeps using them, so known networks survive the migration.
   services.resolved.enable = true;
 
-  networking.wireless.iwd = {
+  networking.networkmanager = {
     enable = true;
-    settings = {
-      General.EnableNetworkConfiguration = true;
-      Network.NameResolvingService = "systemd";
-    };
+    wifi.backend = "iwd";
   };
-
-  # Allow the media kiosk user to call iwctl (iwd's own dbus policy only
-  # permits root and wheel; this policy runs at user= precedence which wins
-  # over context="default" deny).
-  services.dbus.packages = [ iwdMediaPolicy ];
 
   # ── Session ───────────────────────────────────────────────────────────────
   services.desktopManager.plasma6.enable = true;
@@ -238,7 +210,10 @@ in
   users.users.media = {
     isNormalUser = true;
     description  = "Kiosk media user";
-    extraGroups  = [ "video" "input" "audio" "netdev" ];
+    # networkmanager group: lets the kiosk user add/modify connections from
+    # plasma-nm without a polkit password prompt (there is no password to type
+    # on a TV). Replaces the old iwd D-Bus policy override.
+    extraGroups  = [ "video" "input" "audio" "netdev" "networkmanager" ];
     hashedPassword = "";
     openssh.authorizedKeys.keys = config.users.users.fred.openssh.authorizedKeys.keys;
   };
@@ -505,14 +480,11 @@ POWEOF
     brave                          # YouTube TV (Brave Shields ad blocking)
     kdePackages.plasma-settings    # settings app designed for bigscreen
     chromium                       # CinemaFred /tv endpoint
-    kdePackages.plasma-nm           # provides org.kde.plasma.networkmanagement QML module
+    kdePackages.plasma-nm           # network UI in plasma-settings + HomeHeader indicator
     kdePackages.kdeconnect-kde      # provides org.kde.kdeconnect QML module (HomeHeader indicator)
     pipewire                        # libpipewire-0.3.so for plasmashell audio widget dlopen
     plasma-keyboard                  # on-screen keyboard (Qt6/KDE6-native, launched by KWin)
-    kdePackages.konsole            # terminal used by wifi launcher
-    kdePackages.kdialog            # KDE dialog for wifi password entry (triggers plasma-keyboard)
-    wifiMenu                       # fzf-based WiFi picker (arrow + Enter, no Tab)
-    wifiApp                        # launcher: konsole -e wifi-menu
+    kdePackages.konsole            # kept for on-TV troubleshooting (hidden from launcher)
     playerctl                      # MPRIS play/pause
     wireplumber                    # wpctl for volume control
     jellyfinTVApp
