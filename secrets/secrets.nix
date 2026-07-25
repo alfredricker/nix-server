@@ -24,6 +24,7 @@ in
   "cloudflare-tunnel-docmost.age".publicKeys           = [ fred main-node ];
   "postgres-docmost-password.age".publicKeys           = [ fred main-node ];
   "docmost-env.age".publicKeys                         = [ fred main-node ];
+  "dream-trader-db-passwords.age".publicKeys           = [ fred main-node ];
   "dream-trader-runner-env.age".publicKeys             = [ fred main-node ];
   "dream-trader-worker-env.age".publicKeys             = [ fred main-node ];
   "dream-trader-watchdog-env.age".publicKeys           = [ fred main-node ];

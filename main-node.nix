@@ -38,7 +38,7 @@
     enable  = true;
     package = pkgs.postgresql_16;
     settings.listen_addresses = lib.mkForce "*";
-    ensureDatabases = [ "cinemafred" "docmost" ];
+    ensureDatabases = [ "cinemafred" "docmost" "dreamtrader" ];
     ensureUsers = [
       {
         name             = "cinemafred";
@@ -48,6 +48,23 @@
         name             = "docmost";
         ensureDBOwnership = true;
       }
+      # dream-trader's four-role least-privilege topology. The owner has to be
+      # named for the database — ensureDBOwnership only grants ownership of the
+      # same-named DB. The other three are deliberately dt_-prefixed: roles are
+      # cluster-wide, and "runner"/"dashboard" are too generic to squat on a
+      # Postgres shared with cinemafred and docmost.
+      #
+      # Passwords are NOT set here (they'd land in the world-readable Nix
+      # store) — dream-trader/postgres.nix ALTERs them in from an agenix
+      # secret at boot. Grants come from the dream-trader repo's
+      # deploy/pg_roles.sql, applied after each migration.
+      {
+        name             = "dreamtrader";
+        ensureDBOwnership = true;
+      }
+      { name = "dt_runner"; }
+      { name = "dt_worker"; }
+      { name = "dt_dashboard"; }
     ];
     authentication = pkgs.lib.mkOverride 10 ''
     # TYPE  DATABASE    USER        ADDRESS           METHOD
@@ -57,6 +74,15 @@
     host    cinemafred  cinemafred  100.64.0.0/10     scram-sha-256
     local   docmost     docmost                       peer
     host    docmost     docmost     127.0.0.1/32      scram-sha-256
+    # dream-trader: the runner/worker/watchdog units are local to this host and
+    # connect over loopback; the 100.64.0.0/10 line is what lets the desktop
+    # Wails app reach the database over Tailscale. Scoped to the one database,
+    # and `all` there means only the four dt roles above (plus postgres, which
+    # already matches the peer line first). No `local`/peer entry: the service
+    # user is `dream-trader` (hyphen), which can never peer-match a
+    # `dreamtrader` role, and admin access goes through `sudo -u postgres`.
+    host    dreamtrader all         127.0.0.1/32      scram-sha-256
+    host    dreamtrader all         100.64.0.0/10     scram-sha-256
     '';
   };
 

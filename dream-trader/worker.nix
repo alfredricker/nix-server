@@ -16,8 +16,10 @@
   systemd.services.dream-trader-worker = {
     description = "Dream Trader worker (queue-driven compute)";
     wantedBy    = [ "multi-user.target" ];
-    after       = [ "network-online.target" "dream-trader-runner.service" "dream-trader-pystats.service" ];
+    # Postgres is on this host now (was Neon) — see runner.nix.
+    after       = [ "network-online.target" "postgresql.service" "dream-trader-db-passwords.service" "dream-trader-runner.service" "dream-trader-pystats.service" ];
     wants       = [ "network-online.target" ];
+    requires    = [ "postgresql.service" ];
     # Give up after 5 crashes in 5 minutes instead of restarting forever —
     # a broken deploy should land in `failed` (visible via systemctl/monitoring),
     # not loop silently. Clear with `systemctl reset-failed dream-trader-worker`

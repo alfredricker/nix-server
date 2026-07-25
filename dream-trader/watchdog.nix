@@ -20,6 +20,9 @@
 
   systemd.services.dream-trader-watchdog = {
     description = "Dream Trader watchdog (heartbeat check, fired by timer)";
+    # Postgres is on this host now (was Neon) — see runner.nix.
+    after    = [ "postgresql.service" "dream-trader-db-passwords.service" ];
+    requires = [ "postgresql.service" ];
     serviceConfig = {
       Type            = "oneshot";
       User            = "dream-trader";

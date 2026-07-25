@@ -1,8 +1,9 @@
 # Dream Trader — paper-trading bot (Go runner/worker/watchdog + Python
-# pystats). Postgres is external (Neon) — nothing local to provision for it.
+# pystats). Postgres is local as of 2026-07-25 (it used to be Neon, which ran
+# out of compute quota and took the system down): see ./postgres.nix for role
+# passwords and backups, and main-node.nix for the database/role declarations.
 # None of these processes serve inbound traffic, so there's no Cloudflare
-# Tunnel here — they only call out to Neon, Alpaca, ntfy.sh, DeepSeek, and
-# Discord.
+# Tunnel here — they only call out to Alpaca, ntfy.sh, DeepSeek, and Discord.
 #
 # Deploy binaries + pystats from the dream-trader repo (see
 # docs/deploy-dream-trader.md for the full first-time setup):
@@ -12,6 +13,7 @@
 #   ssh root@10.0.0.64 'cd /srv/dream-trader/pystats && sudo -u dream-trader uv venv .venv && sudo -u dream-trader uv sync'
 {
   imports = [
+    ./postgres.nix
     ./pystats.nix
     ./runner.nix
     ./worker.nix
