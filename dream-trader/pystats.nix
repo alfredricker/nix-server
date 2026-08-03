@@ -30,6 +30,11 @@
       ExecStart        = "/srv/dream-trader/pystats/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8420";
       Restart          = "always";
       RestartSec       = "10s";
+      # ~60 MiB resident in practice; the ceiling is headroom for a large
+      # bootstrap or permutation test, not a target.
+      MemoryHigh       = "512M";
+      MemoryMax        = "704M";
+      MemorySwapMax    = "0";
     };
   };
 }

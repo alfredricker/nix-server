@@ -38,7 +38,16 @@
       EnvironmentFile = "/run/secrets/dream-trader-runner-env";
       Restart         = "always";
       RestartSec      = "5s";
-      # No MemoryMax/CPUQuota — this is the protected process.
+      # The protected process: no CPUQuota, and a memory ceiling far above its
+      # ~30 MiB working set. It is bounded at all only because "unbounded"
+      # is how the worker took the whole node down — a cap it can never reach
+      # in normal operation still stops a leak from doing the same.
+      MemoryHigh      = "768M";
+      MemoryMax       = "1024M";
+      MemorySwapMax   = "0";
+      # Same mirror the worker and cmd/backfill-bars use, so live scanning
+      # serves from disk and spends the Alpaca budget only on today's bars.
+      Environment     = [ "DATA_CACHE_ROOT=/data/financial" ];
     };
   };
 }

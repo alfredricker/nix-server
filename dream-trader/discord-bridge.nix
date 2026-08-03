@@ -40,6 +40,10 @@
       '';
       Restart    = "always";
       RestartSec = "5s";
+      # A curl | jq pipe. The cap exists so the budget adds up, not because
+      # this has ever needed one.
+      MemoryMax  = "144M";
+      MemorySwapMax = "0";
     };
   };
 }

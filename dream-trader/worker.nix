@@ -36,8 +36,25 @@
       EnvironmentFile = "/run/secrets/dream-trader-worker-env";
       Restart         = "always";
       RestartSec      = "30s";
-      MemoryMax       = "3G";
+
+      # See dream-trader/default.nix for how the per-unit numbers were chosen.
+      # The worker is the only service that holds a whole universe of bars, so
+      # it gets the bulk of the budget.
+      MemoryHigh      = "2304M";  # start reclaiming here
+      MemoryMax       = "2816M";  # hard ceiling
+      MemorySwapMax   = "0";      # OOM-kill instead of swapping the node to death
       CPUQuota        = "200%";
+
+      # The engine refuses a backtest whose bars would not fit rather than
+      # discovering it by exhausting the host. Kept below MemoryMax so the
+      # process still has room for indicators, trades and the equity curve.
+      Environment     = [
+        "ENGINE_MAX_BAR_MEMORY_MB=1536"
+        # Read the OHLCV mirror instead of the per-service cache under
+        # /srv. Without this the worker keeps its own copy and re-fetches
+        # from Alpaca everything cmd/backfill-bars already put on disk.
+        "DATA_CACHE_ROOT=/data/financial"
+      ];
     };
   };
 }
