@@ -162,7 +162,9 @@
     openFirewall = true;
   };
   users.users.jellyfin.extraGroups = [ "render" "video" ];
-  users.users.fred.extraGroups     = [ "wheel" "jellyfin" "nginx" ];
+  # The desktop uploader connects over SSH as fred and writes posters/HLS into
+  # directories owned by the cinemafred service account.
+  users.users.fred.extraGroups     = [ "wheel" "jellyfin" "nginx" "cinemafred" ];
 
   # ── Syncthing (send-only origin for media-nodes) ──────────────────────────
   #
