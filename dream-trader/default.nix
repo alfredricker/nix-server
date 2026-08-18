@@ -83,7 +83,7 @@
       runtime="$out/runtime.env"
       : > "$runtime"
       for name in DATABASE_URL ALPACA_API_KEY ALPACA_SECRET_KEY ALPACA_API_ENDPOINT \
-                  ALPACA_PAPER_ID ALPACA_PAPER_KEY ALPACA_PAPER_ENDPOINT \
+                  ALPACA_PAPER_ID ALPACA_PAPER_KEY ALPACA_PAPER_SECRET ALPACA_PAPER_ENDPOINT \
                   DATA_PROVIDER DATA_NODE_URL ALPACA_FEED NTFY_URL NTFY_TOKEN \
                   DISCORD_WEBHOOK_URL; do
         value="''${!name-}"
