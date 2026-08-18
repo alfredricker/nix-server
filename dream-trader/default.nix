@@ -1,4 +1,4 @@
-# Dream Trader — paper-trading bot (Go runner/worker/watchdog + Python
+# Dream Trader — consolidated paper-trading service + Python
 # pystats). Postgres is local as of 2026-07-25 (it used to be Neon, which ran
 # out of compute quota and took the system down): see ./postgres.nix for role
 # passwords and backups, and main-node.nix for the database/role declarations.
@@ -33,13 +33,13 @@
 #   rsync -avz --exclude __pycache__ --exclude .venv pystats/ root@10.0.0.64:/srv/dream-trader/pystats/
 #   ssh root@10.0.0.64 chown -R dream-trader:dream-trader /srv/dream-trader
 #   ssh root@10.0.0.64 'cd /srv/dream-trader/pystats && sudo -u dream-trader uv venv .venv && sudo -u dream-trader uv sync'
+{ pkgs, ... }:
+
 {
   imports = [
     ./postgres.nix
     ./pystats.nix
     ./runner.nix
-    ./worker.nix
-    ./watchdog.nix
     ./discord-bridge.nix
   ];
 
@@ -50,7 +50,60 @@
   };
   users.groups.dream-trader = {};
 
-  # Shared by runner/worker/watchdog binaries. Per-service subdirs (pystats)
+  # One encrypted source of truth. A root-only preparation unit creates
+  # least-privilege runtime views so the trading service never receives the
+  # database-owner password merely because the values share an age file.
+  age.secrets."dream-trader" = {
+    file  = ../secrets/dream-trader-runner-env.age;
+    path  = "/run/secrets/dream-trader";
+    owner = "root";
+    mode  = "0400";
+  };
+
+  systemd.services.dream-trader-secrets = {
+    description = "Prepare least-privilege Dream Trader secret views";
+    wantedBy = [ "multi-user.target" ];
+    before = [ "dream-trader.service" "dream-trader-db-passwords.service" "dream-trader-discord-bridge.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      User = "root";
+    };
+    script = ''
+      set -euo pipefail
+      set -a
+      . /run/secrets/dream-trader
+      set +a
+
+      out=/run/dream-trader-secrets
+      # Files remain 0600 and individually owned. The directory needs execute
+      # permission so postgres and dream-trader can traverse to their file.
+      ${pkgs.coreutils}/bin/install -d -m 0711 -o root -g root "$out"
+
+      runtime="$out/runtime.env"
+      : > "$runtime"
+      for name in DATABASE_URL ALPACA_API_KEY ALPACA_SECRET_KEY ALPACA_API_ENDPOINT \
+                  ALPACA_PAPER_ID ALPACA_PAPER_KEY ALPACA_PAPER_ENDPOINT \
+                  DATA_PROVIDER DATA_NODE_URL ALPACA_FEED NTFY_URL NTFY_TOKEN \
+                  DISCORD_WEBHOOK_URL; do
+        value="''${!name-}"
+        [ -n "$value" ] && printf '%s=%s\n' "$name" "$value" >> "$runtime"
+      done
+      ${pkgs.coreutils}/bin/chown dream-trader:dream-trader "$runtime"
+      ${pkgs.coreutils}/bin/chmod 0600 "$runtime"
+
+      db="$out/database.env"
+      : > "$db"
+      for name in DT_OWNER_PW DT_RUNNER_PW DT_WORKER_PW DT_DASHBOARD_PW; do
+        value="''${!name:?missing $name in dream-trader secret}"
+        printf '%s=%s\n' "$name" "$value" >> "$db"
+      done
+      ${pkgs.coreutils}/bin/chown postgres:postgres "$db"
+      ${pkgs.coreutils}/bin/chmod 0600 "$db"
+    '';
+  };
+
+  # Shared by the service and one-shot tools. Per-service subdirs (pystats)
   # are declared in their own file.
   systemd.tmpfiles.rules = [
     "d /srv/dream-trader      0750 dream-trader dream-trader -"

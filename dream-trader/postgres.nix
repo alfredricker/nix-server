@@ -25,19 +25,12 @@
   # ⚠ These passwords are duplicated inside the DSNs in dream-trader-{runner,
   # worker,watchdog}-env.age. Change one, change the other, or the service
   # fails to authenticate on next start.
-  age.secrets."dream-trader-db-passwords" = {
-    file  = ../secrets/dream-trader-db-passwords.age;
-    path  = "/run/secrets/dream-trader-db-passwords";
-    owner = "postgres";
-    mode  = "0600";
-  };
-
   # Set role passwords from the secret each boot — same pattern as
   # cinemafred-db-password / docmost-db-password in main-node.nix.
   systemd.services.dream-trader-db-passwords = {
     description = "Apply dream-trader PostgreSQL role passwords";
-    after       = [ "postgresql.service" "postgresql-setup.service" ];
-    requires    = [ "postgresql.service" ];
+    after       = [ "postgresql.service" "postgresql-setup.service" "dream-trader-secrets.service" ];
+    requires    = [ "postgresql.service" "dream-trader-secrets.service" ];
     wantedBy    = [ "multi-user.target" ];
     serviceConfig = {
       Type            = "oneshot";
@@ -46,7 +39,7 @@
     };
     script = ''
       set -eu
-      . /run/secrets/dream-trader-db-passwords
+      . /run/dream-trader-secrets/database.env
       psql() { ${config.services.postgresql.package}/bin/psql -v ON_ERROR_STOP=1 "$@"; }
       psql -c "ALTER ROLE dreamtrader  WITH PASSWORD '$DT_OWNER_PW'"
       psql -c "ALTER ROLE dt_runner    WITH PASSWORD '$DT_RUNNER_PW'"

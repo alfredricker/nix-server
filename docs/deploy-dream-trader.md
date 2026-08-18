@@ -19,12 +19,10 @@ Config lives in `dream-trader/` (one file per service, imported from
 
 | File | Owns |
 |---|---|
-| `dream-trader/default.nix` | `dream-trader` user/group, `/srv/dream-trader` + `/srv/dream-trader/bin` |
+| `dream-trader/default.nix` | user/group, directories, the one encrypted secret, and least-privilege runtime secret views |
 | `dream-trader/postgres.nix` | DB role passwords (`dream-trader-db-passwords.service`) + nightly backup service/timer |
 | `dream-trader/pystats.nix` | `dream-trader-pystats.service`, `/srv/dream-trader/pystats` |
-| `dream-trader/runner.nix` | `dream-trader-runner.service` (unbounded — the protected process) |
-| `dream-trader/worker.nix` | `dream-trader-worker.service` (MemoryMax=3G, CPUQuota=200%) |
-| `dream-trader/watchdog.nix` | `dream-trader-watchdog.service` + `.timer` (dead-man's switch) |
+| `dream-trader/runner.nix` | consolidated `dream-trader.service` plus transient failure alert |
 | `dream-trader/discord-bridge.nix` | `dream-trader-discord-bridge.service` |
 
 ---
@@ -63,26 +61,19 @@ In Discord: channel settings → Integrations → Webhooks → New Webhook → c
 the URL. That's the only Discord-side setup needed — the bridge service is
 just a `curl` subscriber, not a bot.
 
-#### 2. Create the five secrets
+#### 2. Create the Dream Trader secret
 
 ```bash
 cd secrets/
-nix run github:ryantm/agenix -- -e dream-trader-db-passwords.age
 nix run github:ryantm/agenix -- -e dream-trader-runner-env.age
-nix run github:ryantm/agenix -- -e dream-trader-worker-env.age
-nix run github:ryantm/agenix -- -e dream-trader-watchdog-env.age
-nix run github:ryantm/agenix -- -e dream-trader-discord-webhook.age
 ```
 
-Each opens `$EDITOR` on the plaintext; save and it encrypts automatically.
-Secrets placement rules (kept from the original plan): Alpaca **paper** keys
-only in `runner-env` + `watchdog-env`; DeepSeek key only in `worker-env`; no
-service env file ever contains the owner-role DSN, only the least-privileged
-role for that service.
+This opens `$EDITOR` on the plaintext; save and it encrypts automatically.
+It is the single encrypted source of truth. A root-only preparation unit emits
+separate runtime files, so the trading service cannot read database-owner
+credentials even though they originate in the same age file.
 
-`dream-trader-db-passwords.age` is sourced as shell by
-`dream-trader-db-passwords.service`, so it's four bare assignments — no
-quotes, no spaces around `=`:
+Include the database assignments with no spaces around `=`:
 
 ```sh
 DT_OWNER_PW=...
@@ -91,17 +82,9 @@ DT_WORKER_PW=...
 DT_DASHBOARD_PW=...
 ```
 
-⚠ **These same passwords are embedded in the DSNs inside the three
-`*-env.age` files.** They are stored twice, in two different formats, and
-nothing checks that they agree — if you rotate one, rotate the other in the
-same sitting or the service will fail authentication on its next start.
-
-`dream-trader-runner-env.age`:
-see dream-sec.env
-
-Note what's deliberately **not** here versus the original runbook: no
-`NTFY_TOKEN` (ntfy.sh public topics don't need one) and no `NTFY_TOPIC` (dead
-code — see the caveat above).
+The same file also contains `DATABASE_URL`, Alpaca data and paper variables,
+and notification variables including `DISCORD_WEBHOOK_URL`. `DATABASE_URL`
+must use the password in `DT_RUNNER_PW`.
 
 #### 3. Deploy the NixOS config
 
@@ -111,10 +94,9 @@ nixos-rebuild switch --flake .#main-node --target-host root@main-node
 
 This creates the `dream-trader` user, `/srv/dream-trader/{bin,pystats}`, the
 `dreamtrader` database and its four roles (with passwords applied), the nightly
-backup timer, and starts `dream-trader-pystats` +
-`dream-trader-discord-bridge`. The runner/worker/watchdog services will fail to
-start until binaries are deployed in the next step (nothing at
-`/srv/dream-trader/bin/` yet).
+backup timer, and starts the consolidated service, `dream-trader-pystats`, and
+`dream-trader-discord-bridge`. The consolidated service requires its binary to
+be deployed at `/srv/dream-trader/releases/current/bin/dream-trader`.
 
 The database is created **empty** — no tables. Schema comes from the
 dream-trader repo's `cmd/migrate`, and grants from its `deploy/pg_roles.sql`;
@@ -197,11 +179,7 @@ containing a runaway worker job to itself.
 
 | Secret | Purpose |
 |---|---|
-| `dream-trader-db-passwords.age` | The four `dreamtrader`/`dt_*` role passwords, applied by `dream-trader-db-passwords.service` |
-| `dream-trader-runner-env.age` | Loopback DSN (`dt_runner` role) + Alpaca paper + data-feed creds |
-| `dream-trader-worker-env.age` | Loopback DSN (`dt_worker` role) + DeepSeek key + data-feed creds |
-| `dream-trader-watchdog-env.age` | Loopback DSN (`dt_dashboard` role) + Alpaca paper creds (for the market-calendar check) |
-| `dream-trader-discord-webhook.age` | Discord webhook URL for the ntfy→Discord bridge |
+| `dream-trader-runner-env.age` | All Dream Trader secrets; root splits it into service and Postgres runtime views under `/run/dream-trader-secrets` |
 
 ---
 
@@ -252,14 +230,14 @@ live one.
 
 ### Troubleshooting
 
-**Runner/worker won't start — binary not found**
+**Dream Trader won't start — binary not found**
 
 `/srv/dream-trader/bin/` is empty until step 4 (rsync) has run at least once.
 
-**Worker never scans anything**
+**Dream Trader never scans anything**
 
 Check `DATA_PROVIDER`/`ALPACA_API_KEY`/`ALPACA_SECRET_KEY`/`ALPACA_FEED` are
-present in `dream-trader-worker-env.age` — without them
+present in `dream-trader-runner-env.age` — without them
 `data.ProviderConfigFromEnv` returns an empty config and the feed silently
 does nothing.
 
