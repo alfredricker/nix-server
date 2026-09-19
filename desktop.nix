@@ -40,11 +40,20 @@ let
   # Brave in app-mode with a SmartTV user-agent so YouTube serves the Leanback
   # d-pad UI rather than detecting a desktop browser and redirecting.
   # Brave Shields handles ad blocking with no extension management required.
+  #
+  # --user-data-dir is load-bearing, not hygiene: Chromium is single-instance
+  # per profile, so if another Brave app (Twitch) is already running, a second
+  # `brave --app=...` just hands the URL to the live process ("Opening in
+  # existing browser session") and DISCARDS every other flag — including
+  # --user-agent. YouTube then sees a desktop Brave and serves the normal site.
+  # A private profile per app keeps each launch its own process, with its own
+  # user-agent and its own logins.
   youtubeTVLauncher = pkgs.writeShellApplication {
     name         = "youtube-tv";
     runtimeInputs = [ pkgs.brave ];
     text = ''
       exec brave \
+        --user-data-dir="$HOME/.local/share/brave-youtube-tv" \
         --app=https://www.youtube.com/tv \
         --start-fullscreen \
         --disable-infobars \
@@ -87,6 +96,7 @@ let
     runtimeInputs = [ pkgs.brave ];
     text = ''
       exec brave \
+        --user-data-dir="$HOME/.local/share/brave-twitch-tv" \
         --app=https://www.twitch.tv/ \
         --start-fullscreen \
         --enable-spatial-navigation \

@@ -133,3 +133,26 @@ Brave Shields will not block Twitch's server-side-stitched mid-roll ads.
 Launched with `--enable-spatial-navigation` (Blink's `SpatialNavigationController`; switch
 confirmed present in chromium-unwrapped 152 by string-grepping the binary) so arrow keys move
 focus to the nearest control instead of scrolling the page.
+
+
+## Brave app-mode needs a per-app --user-data-dir (2026-09-18)
+
+Symptom after the Twitch app landed: the YouTube TV app opened the *normal* YouTube site.
+Cause was not the flake update (nixpkgs jumped ~8 months, Brave 1.85.118 → 1.95.101, Chromium 153)
+— the SmartTV UA still gets leanback in Chromium 152/153, verified by curl and headless render.
+Real cause: Chromium is single-instance per profile. With the Twitch app already running on the
+default profile, `brave --app=https://www.youtube.com/tv --user-agent=...` printed
+"Opening in existing browser session" and handed only the URL to the live Twitch process,
+**discarding --user-agent**, so YouTube saw a desktop Brave.
+
+Fix: both Brave launchers in `desktop.nix` now pass
+`--user-data-dir="$HOME/.local/share/brave-{youtube,twitch}-tv"`. Verified on freds-node with
+both apps open at once — two separate processes, and the youtube profile's History shows
+`https://www.youtube.com/tv` titled "YouTube on TV".
+
+Any future Brave/Chromium app added here must get its own `--user-data-dir`, or it will silently
+steal or be stolen by another app's process.
+
+Debugging notes: headless Brave hangs on the NUC (don't bother); `spectacle -b` writes nothing
+in that session; `python3` is not on the media user's PATH; and `pkill -f 'brave.*--app'` over
+ssh matches the ssh command line itself and kills the remote shell — put the pattern in a script.
