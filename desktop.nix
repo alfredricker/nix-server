@@ -3,22 +3,13 @@
 # KDE Plasma Bigscreen desktop for TV-attached nodes (Wayland via SDDM).
 
 let
-  # plasma-keyboard's wrapQtAppsHook only adds its own build deps to
-  # QML_IMPORT_PATH.  layer-shell-qt (which provides org.kde.layershell) is a
-  # kwin dep, not a plasma-keyboard dep, so it's missing from the wrapper.
-  plasma-keyboard = pkgs.kdePackages.plasma-keyboard.overrideAttrs (old: {
-    qtWrapperArgs = (old.qtWrapperArgs or []) ++ [
-      "--prefix" "QML_IMPORT_PATH" ":" "${pkgs.kdePackages.layer-shell-qt}/lib/qt-6/qml"
-    ];
-  });
-
   jellyfinTVApp = pkgs.symlinkJoin {
     name  = "jellyfin-tv-launcher";
     paths = [
       (pkgs.makeDesktopItem {
         name        = "jellyfin-tv";
         desktopName = "Jellyfin";
-        exec        = "${pkgs.chromium}/bin/chromium --app=http://localhost:3001 --start-fullscreen --disable-infobars --noerrdialogs --disable-session-crashed-bubble --ozone-platform=wayland --enable-wayland-ime";
+        exec        = "${pkgs.chromium}/bin/chromium --app=http://localhost:3001 --start-fullscreen --disable-infobars --noerrdialogs --disable-session-crashed-bubble --ozone-platform=wayland";
         icon        = "jellyfin-tv";
         categories  = [ "AudioVideo" "Video" ];
       })
@@ -35,7 +26,7 @@ let
       (pkgs.makeDesktopItem {
         name        = "cinemafred";
         desktopName = "CinemaFred";
-        exec        = "${pkgs.chromium}/bin/chromium --app=https://cinemafred.com/tv --disable-infobars --noerrdialogs --disable-session-crashed-bubble --ozone-platform=wayland --enable-wayland-ime";
+        exec        = "${pkgs.chromium}/bin/chromium --app=https://cinemafred.com/tv --disable-infobars --noerrdialogs --disable-session-crashed-bubble --ozone-platform=wayland";
         icon        = "cinemafred";
         categories  = [ "AudioVideo" "Video" ];
       })
@@ -80,6 +71,48 @@ let
           desktopName = "YouTube";
           exec        = "${youtubeTVLauncher}/bin/youtube-tv";
           icon        = "youtube-tv";
+          categories  = [ "AudioVideo" "Video" ];
+        })
+      ];
+    };
+
+  # Twitch has no leanback/TV web endpoint (its TV apps are native), so this is
+  # the regular desktop site in app mode. --enable-spatial-navigation turns on
+  # Blink's SpatialNavigationController, which makes the arrow keys move focus
+  # to the nearest link/button in that direction instead of scrolling — the
+  # closest thing to d-pad navigation without a TV-specific site. Enter
+  # activates, F fullscreens the player.
+  twitchTVLauncher = pkgs.writeShellApplication {
+    name          = "twitch-tv";
+    runtimeInputs = [ pkgs.brave ];
+    text = ''
+      exec brave \
+        --app=https://www.twitch.tv/ \
+        --start-fullscreen \
+        --enable-spatial-navigation \
+        --disable-infobars \
+        --noerrdialogs \
+        --disable-session-crashed-bubble \
+        --ozone-platform=wayland
+    '';
+  };
+
+  twitchTVApp =
+    let
+      icon = pkgs.runCommand "twitch-tv-icon" {} ''
+        mkdir -p $out/share/icons/hicolor/scalable/apps
+        cp ${./assets/twitch-tv.svg} $out/share/icons/hicolor/scalable/apps/twitch-tv.svg
+      '';
+    in
+    pkgs.symlinkJoin {
+      name  = "twitch-tv-app";
+      paths = [
+        icon
+        (pkgs.makeDesktopItem {
+          name        = "twitch-tv";
+          desktopName = "Twitch";
+          exec        = "${twitchTVLauncher}/bin/twitch-tv";
+          icon        = "twitch-tv";
           categories  = [ "AudioVideo" "Video" ];
         })
       ];
@@ -269,13 +302,9 @@ in
     Hidden=true
   '';
 
-  # Tell KWin to use plasma-keyboard as the Wayland input method.
-  # plasma-keyboard is Qt6/KDE6-native; KWin launches it on demand via the
-  # X-KDE-Wayland-VirtualKeyboard desktop entry flag.
+  # No [Wayland] InputMethod: the remote has a physical keyboard, so the
+  # on-screen keyboard is gone (see mediaDropInputMethod below).
   environment.etc."xdg/kwinrc".text = ''
-    [Wayland]
-    InputMethod=/run/current-system/sw/share/applications/org.kde.plasma.keyboard.desktop
-
     [Plugins]
     close-on-show-desktopEnabled=true
   '';
@@ -380,24 +409,14 @@ POWEOF
     fi
   '';
 
-  # KWin reads ~/.config/kwinrc once Plasma has written it and stops honoring
-  # /etc/xdg/kwinrc for the [Wayland] section. Without InputMethod set there,
-  # KWin never launches plasma-keyboard and busctl reports available=false.
-  # Idempotently ensure the user kwinrc has the line.
-  system.activationScripts.mediaKwinInputMethod = ''
-    if [ -d /home/media ]; then
-      mkdir -p /home/media/.config
-      chown media:users /home/media/.config
-      cfg=/home/media/.config/kwinrc
-      target=/run/current-system/sw/share/applications/org.kde.plasma.keyboard.desktop
-      if [ ! -e "$cfg" ]; then
-        printf '[Wayland]\nInputMethod=%s\n' "$target" > "$cfg"
-      elif ! grep -q '^\[Wayland\]' "$cfg"; then
-        printf '\n[Wayland]\nInputMethod=%s\n' "$target" >> "$cfg"
-      elif ! grep -qE '^InputMethod=.*plasma\.keyboard' "$cfg"; then
-        sed -i "/^\[Wayland\]/a InputMethod=$target" "$cfg"
-      fi
-      chown media:users "$cfg"
+  # The on-screen keyboard is disabled now that the remote has a physical
+  # keyboard. /etc/xdg/kwinrc is shadowed by ~/.config/kwinrc once Plasma has
+  # written it, so dropping the system-level setting is not enough on nodes
+  # that were already deployed — strip the line from the user file too.
+  system.activationScripts.mediaDropInputMethod = ''
+    cfg=/home/media/.config/kwinrc
+    if [ -f "$cfg" ]; then
+      ${pkgs.gnused}/bin/sed -i '/^InputMethod=/d' "$cfg"
     fi
   '';
 
@@ -483,13 +502,13 @@ POWEOF
     kdePackages.plasma-nm           # network UI in plasma-settings + HomeHeader indicator
     kdePackages.kdeconnect-kde      # provides org.kde.kdeconnect QML module (HomeHeader indicator)
     pipewire                        # libpipewire-0.3.so for plasmashell audio widget dlopen
-    plasma-keyboard                  # on-screen keyboard (Qt6/KDE6-native, launched by KWin)
     kdePackages.konsole            # kept for on-TV troubleshooting (hidden from launcher)
     playerctl                      # MPRIS play/pause
     wireplumber                    # wpctl for volume control
     jellyfinTVApp
     cinemaFredApp
     youtubeTVApp
+    twitchTVApp
     closeOnShowDesktop
   ];
 }

@@ -112,3 +112,24 @@ Both written by `system.activationScripts.mediaHideApps`.
 ## Power/sleep
 
 `system.activationScripts.mediaPowerProfile` writes `~/.config/powermanagementprofilesrc` with `suspendType=0` (no sleep) + DPMS screen-off after 10 min + `lockEnabled=false`. kscreenlockerrc already has `Autolock=false`/`LockOnResume=false`. Together these should eliminate any unlock screen on wake.
+
+
+## On-screen keyboard REMOVED (2026-09-18)
+
+A remote with a built-in physical keyboard replaced the need for it. Removed from `desktop.nix`:
+`plasma-keyboard` package + its layer-shell-qt `overrideAttrs` wrapper, `[Wayland] InputMethod=`
+from `/etc/xdg/kwinrc`, the `--enable-wayland-ime` flag on the Chromium launchers, and the
+`mediaKwinInputMethod` activation script. Replaced by `mediaDropInputMethod`, which strips
+`^InputMethod=` from `/home/media/.config/kwinrc` — needed because the user file shadows
+`/etc/xdg/kwinrc` on nodes already deployed.
+
+## Twitch app added (2026-09-18)
+
+`twitchTVApp` in `desktop.nix` — Brave `--app=https://www.twitch.tv/` (regular desktop site;
+Twitch has no leanback web endpoint like `youtube.com/tv`, its TV apps are native). Icon at
+`assets/twitch-tv.svg`. Driven by the remote's keyboard: Tab/arrows, Enter, `F` for fullscreen.
+Brave Shields will not block Twitch's server-side-stitched mid-roll ads.
+
+Launched with `--enable-spatial-navigation` (Blink's `SpatialNavigationController`; switch
+confirmed present in chromium-unwrapped 152 by string-grepping the binary) so arrow keys move
+focus to the nearest control instead of scrolling the page.
