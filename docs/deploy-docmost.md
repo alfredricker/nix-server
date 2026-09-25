@@ -1,4 +1,8 @@
-# Deploy — Docmost
+# Deploy — Docmost (historical)
+
+Docmost has been removed from the desired configuration. Do not use this
+guide to deploy it without restoring the old configuration first. See
+[retirement and migration](retire-docmost.md) for the export and shutdown order.
 
 Docmost (open-source Notion/Confluence alternative) runs as the official OCI
 image via podman on main-node, using `--network=host` to reach Postgres and
