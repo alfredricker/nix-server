@@ -221,8 +221,9 @@
   };
 
   # ── Portfolio site ────────────────────────────────────────────────────────
-  # See portfolio.nix. Only on Tailscale for now (http://main-node:3003); add a
-  # Cloudflare Tunnel ingress to make it public.
+  # See portfolio.nix. The site itself is hosted on Cloudflare; only its music API
+  # is public from here, via the "portfolio" tunnel below. Everything is also on
+  # Tailscale at http://main-node:3003.
   services.portfolio = {
     enable    = true;
     musicDirs = map (album: "/data/music/lib/electronic/as_light_fell/${album}") [
@@ -306,10 +307,16 @@
     file = ./secrets/cloudflare-tunnel-cinemafred-app.age;
     path = "/run/secrets/cloudflare-tunnel-cinemafred-app.json";
   };
+  age.secrets."cloudflare-tunnel-portfolio" = {
+    file = ./secrets/cloudflare-tunnel-portfolio.age;
+    path = "/run/secrets/cloudflare-tunnel-portfolio.json";
+  };
   # ── Cloudflare Tunnels ────────────────────────────────────────────────────
   #
   # jellyfin.rickermedia.com   → Jellyfin (direct, no CDN routing needed)
   # main-node.rickermedia.com  → 404 (legacy public media origin disabled)
+  # music-origin.alfredricker.com/api/music/* → portfolio (reached through the
+  #                              alfredricker.com Worker in alfred-com/worker/)
   #
   # Provision:
   #   cloudflared tunnel create jellyfin
@@ -338,6 +345,15 @@
       ingress."cinemafred.com"     = "http://127.0.0.1:8081";
       ingress."www.cinemafred.com" = "http://127.0.0.1:8081";
     };
+    # Only the music API; every other path gets the 404 default.
+    tunnels."portfolio" = {
+      credentialsFile = "/run/secrets/cloudflare-tunnel-portfolio.json";
+      default         = "http_status:404";
+      ingress."music-origin.alfredricker.com" = {
+        service = "http://127.0.0.1:${toString config.services.portfolio.port}";
+        path    = "^/api/music/";
+      };
+    };
   };
 
   # DynamicUser=true (cloudflared module default) prevents LoadCredential from
@@ -345,6 +361,7 @@
   systemd.services."cloudflared-tunnel-jellyfin".serviceConfig.DynamicUser          = lib.mkForce false;
   systemd.services."cloudflared-tunnel-cinemafred-origin".serviceConfig.DynamicUser = lib.mkForce false;
   systemd.services."cloudflared-tunnel-cinemafred-app".serviceConfig.DynamicUser    = lib.mkForce false;
+  systemd.services."cloudflared-tunnel-portfolio".serviceConfig.DynamicUser         = lib.mkForce false;
 
   # ── Packages ──────────────────────────────────────────────────────────────
   # nodejs + openssl are needed at deploy time for `npx prisma generate` /
