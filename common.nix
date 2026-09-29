@@ -31,6 +31,11 @@
     '';
   };
 
+  # ── Boot ──────────────────────────────────────────────────────────────────
+  # The ESP is only 512M (disko.nix). Keep the newest 10 generations in the boot
+  # menu so old kernels and initrds can't fill it up.
+  boot.loader.systemd-boot.configurationLimit = 10;
+
   # ── Nix ───────────────────────────────────────────────────────────────────
   nix.settings.trusted-users = [ "root" "fred" ];
 

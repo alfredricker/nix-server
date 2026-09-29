@@ -194,7 +194,6 @@
     environment = {
       NODE_ENV                    = "production";
       PORT                        = "3000";
-      MEDIA_BASE_URL              = "https://main-node.rickermedia.com";
       PRISMA_QUERY_ENGINE_LIBRARY = "/srv/cinemafred/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node";
     };
     serviceConfig = {
@@ -202,8 +201,17 @@
       User             = "cinemafred";
       Group            = "cinemafred";
       WorkingDirectory = "/srv/cinemafred";
+      StateDirectory   = "cinemafred";
+      StateDirectoryMode = "0700";
       ExecStart        = pkgs.writeShellScript "cinemafred-start" ''
         export DATABASE_URL="postgresql://cinemafred:$(cat /run/secrets/postgres-cinemafred-password)@127.0.0.1/cinemafred"
+        # Persistent secret outside the Nix store. First rollout intentionally
+        # invalidates legacy tokens signed with the old fallback secret.
+        umask 077
+        if [ ! -s /var/lib/cinemafred/jwt-secret ]; then
+          ${pkgs.openssl}/bin/openssl rand -hex 32 > /var/lib/cinemafred/jwt-secret
+        fi
+        export JWT_SECRET="$(cat /var/lib/cinemafred/jwt-secret)"
         export LD_LIBRARY_PATH="${pkgs.openssl.out}/lib"
         exec ${pkgs.nodejs}/bin/node server.js
       '';
@@ -212,38 +220,74 @@
     };
   };
 
-  # ── Nginx (cinemafred HLS origin) ─────────────────────────────────────────
-  #
-  # Binds to all interfaces so media-nodes can reach it over Tailscale as a
-  # cache origin. The firewall only allows port 8080 on the trusted Tailscale
-  # interface — it is not reachable from the public internet.
-  # Public access goes through the Cloudflare Tunnel below.
+  # ── Portfolio site ────────────────────────────────────────────────────────
+  # See portfolio.nix. Only on Tailscale for now (http://main-node:3003); add a
+  # Cloudflare Tunnel ingress to make it public.
+  services.portfolio = {
+    enable    = true;
+    musicDirs = map (album: "/data/music/lib/electronic/as_light_fell/${album}") [
+      "against_horizon_radar"
+      "spotted_moth"
+      "at_night"
+      "will_i_see_faces"
+      "discretion_cement_feathered"
+      "roam_through_blue_day"
+      "then_i_saw_what_we_truly_were"
+    ];
+  };
+  # /data is nofail, so nothing else orders services after it. Wait for it when
+  # it's being mounted, or the album bind mounts would miss it.
+  systemd.services.portfolio.after = [ "data.mount" ];
+
+  # Raw storage is only reachable by local app handlers (posters/SRT conversion).
+  # The public app tunnel goes through the authenticated Nginx front end.
   services.nginx = {
     enable = true;
     virtualHosts."cinemafred-origin" = {
-      listen = [{ addr = "0.0.0.0"; port = 8080; ssl = false; }];
-      root   = "/data/cinemafred";
+      listen = [{ addr = "127.0.0.1"; port = 8080; ssl = false; }];
+      root = "/data/cinemafred";
+      locations."/".extraConfig = ''
+        disable_symlinks on;
+        autoindex off;
+        add_header Cache-Control "private, no-store" always;
+      '';
+    };
+    virtualHosts."cinemafred-app" = {
+      listen = [{ addr = "127.0.0.1"; port = 8081; ssl = false; }];
+      serverName = "cinemafred.com www.cinemafred.com";
+      locations."= /_playback_auth".extraConfig = ''
+        internal;
+        proxy_pass http://127.0.0.1:3000/api/auth/playback;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header Host $host;
+        proxy_cache off;
+      '';
+      locations."^~ /media/".extraConfig = ''
+        auth_request /_playback_auth;
+        alias /data/cinemafred/;
+        disable_symlinks on;
+        autoindex off;
+        limit_except GET HEAD { deny all; }
+        expires off;
+        add_header Cache-Control "private, no-store" always;
+        add_header X-Content-Type-Options nosniff always;
+        types {
+          application/vnd.apple.mpegurl m3u8;
+          video/mp2t ts;
+          video/mp4 mp4 m4s;
+          text/vtt vtt;
+          text/plain srt;
+        }
+      '';
       locations."/" = {
+        proxyPass = "http://127.0.0.1:3000";
+        proxyWebsockets = true;
         extraConfig = ''
-          add_header Cache-Control "public, max-age=3600";
-          add_header Accept-Ranges bytes;
-          add_header Access-Control-Allow-Origin "https://cinemafred.com";
-          add_header Access-Control-Allow-Methods "GET, HEAD, OPTIONS";
-          add_header Access-Control-Allow-Headers "Range";
-          add_header Access-Control-Expose-Headers "Content-Range, Content-Length, Accept-Ranges";
-          if ($request_method = OPTIONS) {
-            return 204;
-          }
-          types {
-            application/vnd.apple.mpegurl  m3u8;
-            video/mp2t                      ts;
-            video/mp4                       mp4;
-            image/jpeg                      jpg jpeg;
-            image/png                       png;
-            image/webp                      webp;
-            text/vtt                        vtt;
-            text/plain                      srt;
-          }
+          proxy_set_header Host $host;
+          proxy_set_header X-Forwarded-Proto https;
+          proxy_cache off;
         '';
       };
     };
@@ -265,9 +309,7 @@
   # ── Cloudflare Tunnels ────────────────────────────────────────────────────
   #
   # jellyfin.rickermedia.com   → Jellyfin (direct, no CDN routing needed)
-  # main-node.rickermedia.com  → Nginx HLS origin (used by the cinemafred.com
-  #                              Cloudflare Worker as the final fallback when
-  #                              no media-node edge is reachable)
+  # main-node.rickermedia.com  → 404 (legacy public media origin disabled)
   #
   # Provision:
   #   cloudflared tunnel create jellyfin
@@ -277,7 +319,7 @@
   #   cloudflared tunnel route dns jellyfin         jellyfin.rickermedia.com
   #   cloudflared tunnel route dns cinemafred-origin main-node.rickermedia.com
   #
-  # cinemafred.com itself is handled by a Cloudflare Worker (see worker/).
+  # cinemafred.com → authenticated Nginx front end → Next.js / private media.
   services.cloudflared = {
     enable = true;
     tunnels."jellyfin" = {
@@ -288,13 +330,13 @@
     tunnels."cinemafred-origin" = {
       credentialsFile = "/run/secrets/cloudflare-tunnel-cinemafred-origin.json";
       default         = "http_status:404";
-      ingress."main-node.rickermedia.com" = "http://127.0.0.1:8080";
+      ingress."main-node.rickermedia.com" = "http_status:404";
     };
     tunnels."cinemafred-app" = {
       credentialsFile = "/run/secrets/cloudflare-tunnel-cinemafred-app.json";
       default         = "http_status:404";
-      ingress."cinemafred.com"     = "http://127.0.0.1:3000";
-      ingress."www.cinemafred.com" = "http://127.0.0.1:3000";
+      ingress."cinemafred.com"     = "http://127.0.0.1:8081";
+      ingress."www.cinemafred.com" = "http://127.0.0.1:8081";
     };
   };
 

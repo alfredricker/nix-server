@@ -7,8 +7,11 @@
   inputs.disko.inputs.nixpkgs.follows = "nixpkgs";
   inputs.agenix.url         = "github:ryantm/agenix";
   inputs.agenix.inputs.nixpkgs.follows = "nixpkgs";
+  # Portfolio site, served from main-node (portfolio.nix).
+  inputs.alfred-com.url     = "github:alfredricker/alfred-com";
+  inputs.alfred-com.inputs.nixpkgs.follows = "nixpkgs";
 
-  outputs = { self, nixpkgs, nixos-hardware, disko, agenix }:
+  outputs = { self, nixpkgs, nixos-hardware, disko, agenix, alfred-com }:
     let
       # ── Cluster topology ──────────────────────────────────────────────────
       #
@@ -51,6 +54,8 @@
 
       # ── Hardware baseline for HeroBox (Jasper Lake) ───────────────────────
       hardwareModulesHero = hostname: [
+        # Defines hardware.intelgpu (the NUC8 module above pulls it in itself).
+        nixos-hardware.nixosModules.common-gpu-intel
         disko.nixosModules.disko
         ./disko.nix
         ./hardware/${hostname}.nix
@@ -70,7 +75,9 @@
           modules     = hardwareModules hostname ++ [
             agenix.nixosModules.default
             ./common.nix
+            ./portfolio.nix
             ./main-node.nix
+            { services.portfolio.package = alfred-com.packages.${nodeCfg.system}.default; }
           ];
         };
 
@@ -101,5 +108,15 @@
         nixpkgs.lib.mapAttrs mkMainNode mainNode //
         nixpkgs.lib.mapAttrs mkMediaNode mediaNodes //
         nixpkgs.lib.mapAttrs mkHeroNode heroNodes;
+
+      # `nix flake check` builds the full system for main-node and every media-node
+      # and runs the VM tests. Run it before deploying anything.
+      # heroNodes are evaluated by flake check but not built (hero1-node is unused).
+      checks.x86_64-linux =
+        nixpkgs.lib.genAttrs (builtins.attrNames (mainNode // mediaNodes))
+          (name: self.nixosConfigurations.${name}.config.system.build.toplevel) // {
+          portfolio = nixpkgs.legacyPackages.x86_64-linux.testers.runNixOSTest
+            (import ./tests/portfolio.nix { portfolioPackage = alfred-com.packages.x86_64-linux.default; });
+        };
     };
 }
