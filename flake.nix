@@ -7,8 +7,9 @@
   inputs.disko.inputs.nixpkgs.follows = "nixpkgs";
   inputs.agenix.url         = "github:ryantm/agenix";
   inputs.agenix.inputs.nixpkgs.follows = "nixpkgs";
-  # Portfolio site, served from main-node (portfolio.nix).
-  inputs.alfred-com.url     = "github:alfredricker/alfred-com";
+  # Portfolio site, served from main-node (portfolio.nix). The repo is private, so
+  # fetch it over SSH with your key; github: goes through the unauthenticated API.
+  inputs.alfred-com.url     = "git+ssh://git@github.com/alfredricker/alfred-com";
   inputs.alfred-com.inputs.nixpkgs.follows = "nixpkgs";
 
   outputs = { self, nixpkgs, nixos-hardware, disko, agenix, alfred-com }:
